@@ -96,3 +96,4 @@ export default function LiveMapView({ token, pickup, dropoff, routeGeometry }) {
     />
   );
 }
+

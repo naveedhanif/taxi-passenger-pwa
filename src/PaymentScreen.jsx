@@ -140,3 +140,4 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, amou
     </div>
   );
 }
+

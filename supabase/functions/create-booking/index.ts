@@ -219,3 +219,4 @@ function jsonError(message: string, status: number) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+

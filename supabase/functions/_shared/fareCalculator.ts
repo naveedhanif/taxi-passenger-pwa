@@ -96,3 +96,4 @@ export function calculateFare(params: {
 export function eurosToStripeCents(amountInEuros: number): number {
   return Math.round(amountInEuros * 100);
 }
+

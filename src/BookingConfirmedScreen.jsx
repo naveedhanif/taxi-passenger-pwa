@@ -84,3 +84,4 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
     </div>
   );
 }
+

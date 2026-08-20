@@ -270,3 +270,4 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0 }) 
     </div>
   );
 }
+

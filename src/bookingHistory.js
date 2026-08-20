@@ -19,3 +19,4 @@ function categorizeBookings(bookings) {
 }
 
 export { categorizeBookings, ACTIVE_STATUSES, PAST_STATUSES };
+

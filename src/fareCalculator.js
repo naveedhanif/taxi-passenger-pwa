@@ -104,3 +104,4 @@ function selectFareRule(fareRules, tariffPeriod) {
 }
 
 export { getTariffPeriod, calculateFare, selectFareRule };
+
