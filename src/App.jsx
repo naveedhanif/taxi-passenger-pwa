@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, AlertCircle } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
 import FareEstimateScreen from "./FareEstimateScreen.jsx";
@@ -8,6 +8,11 @@ import BookingConfirmedScreen from "./BookingConfirmedScreen.jsx";
 import GuestAccountChoice from "./GuestAccountChoice.jsx";
 import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
+import { createBooking } from "./bookingApi.js";
+
+// Demo driver id — a real deployment passes the actual driver's id
+// from the URL/QR context (e.g. resolved from the booking_slug).
+const DEMO_DRIVER_ID = "00000000-0000-0000-0000-000000000000";
 
 // Demo coordinates (Dublin) so FareEstimateScreen has something real to
 // call Mapbox with once VITE_MAPBOX_TOKEN is set.
@@ -32,11 +37,42 @@ export default function App() {
   const [screen, setScreen] = useState("booking");
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Real booking state — populated by the actual Edge Function response,
+  // not demo data. bookingResult is null until createBooking succeeds.
+  const [bookingResult, setBookingResult] = useState(null);
+  const [bookingError, setBookingError] = useState("");
+  const [creatingBooking, setCreatingBooking] = useState(false);
+
   const currentLabel = SCREENS.find((s) => s.id === screen)?.label;
 
   function selectScreen(id) {
     setScreen(id);
     setMenuOpen(false);
+  }
+
+  async function handleConfirmFare() {
+    setBookingError("");
+    setCreatingBooking(true);
+
+    const result = await createBooking({
+      driverId: DEMO_DRIVER_ID,
+      passengerName: "Sarah Kelly",
+      passengerPhone: "+353 87 123 4567",
+      pickup: DEMO_PICKUP,
+      dropoff: DEMO_DROPOFF,
+      scheduledTime: new Date(),
+      accessToken: null, // null = guest booking; pass a real session token for signed-in customers
+    });
+
+    setCreatingBooking(false);
+
+    if (result.error) {
+      setBookingError(result.error);
+      return;
+    }
+
+    setBookingResult(result);
+    setScreen("payment");
   }
 
   return (
@@ -101,18 +137,36 @@ export default function App() {
             scheduledTime={new Date()}
             fareRules={DEMO_FARE_RULES}
             preBookingFee={3.0}
-            onConfirm={() => setScreen("payment")}
+            onConfirm={handleConfirmFare}
             onBack={() => setScreen("booking")}
           />
         )}
 
-        {screen === "payment" && (
+        {creatingBooking && (
+          <div className="mx-auto flex w-full max-w-[400px] flex-col items-center gap-3 p-10 text-center text-sm text-[#5F5E5A]">
+            Creating your booking…
+          </div>
+        )}
+
+        {bookingError && !creatingBooking && (
+          <div className="mx-auto flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+            <AlertCircle size={16} /> {bookingError}
+          </div>
+        )}
+
+        {screen === "payment" && bookingResult && (
           <PaymentScreen
             stripePublishableKey={import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY}
-            clientSecret={null} // only exists once the create-booking Edge Function has run
-            amount={19.64}
+            clientSecret={bookingResult.clientSecret}
+            amount={bookingResult.fare.total}
             onSuccess={() => setScreen("confirmed")}
           />
+        )}
+
+        {screen === "payment" && !bookingResult && !creatingBooking && (
+          <div className="mx-auto w-full max-w-[400px] p-10 text-center text-sm text-[#8C8977]">
+            No booking yet — go through "2. Fare estimate" and tap "Confirm & pay" first.
+          </div>
         )}
 
         {screen === "confirmed" && (
@@ -120,7 +174,7 @@ export default function App() {
             pickup={DEMO_PICKUP}
             dropoff={DEMO_DROPOFF}
             scheduledTime={new Date()}
-            totalPaid={19.64}
+            totalPaid={bookingResult?.fare?.total ?? 0}
             onViewBooking={() => setScreen("status")}
           />
         )}
