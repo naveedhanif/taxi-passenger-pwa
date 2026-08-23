@@ -1,0 +1,57 @@
+diff --git a/src/App.jsx b/src/App.jsx
+index 36acd9c..4757830 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -12,7 +12,9 @@ import { createBooking } from "./bookingApi.js";
+ 
+ // Demo driver id — a real deployment passes the actual driver's id
+ // from the URL/QR context (e.g. resolved from the booking_slug).
+-const DEMO_DRIVER_ID = "00000000-0000-0000-0000-000000000000";
++// This must be a real row in the `drivers` table with is_active = true
++// AND stripe_connect_onboarded = true, or create-booking will 404/400.
++const DEMO_DRIVER_ID = "aaaaaaaa-1111-1111-1111-111111111111";
+ 
+ // Demo coordinates (Dublin) so FareEstimateScreen has something real to
+ // call Mapbox with once VITE_MAPBOX_TOKEN is set.
+@@ -43,6 +45,17 @@ export default function App() {
+   const [bookingError, setBookingError] = useState("");
+   const [creatingBooking, setCreatingBooking] = useState(false);
+ 
++  // Populated when the passenger submits the booking form. Until then,
++  // the fare screen falls back to demo pickup/dropoff below.
++  const [formSelection, setFormSelection] = useState(null);
++
++  function handleBookingFormSubmit({ pickup, dropoff, date, time }) {
++    // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
++    // booking form resolves them via Mapbox before calling onSubmit.
++    setFormSelection({ pickup, dropoff, scheduledTime: new Date(`${date}T${time}`) });
++    setScreen("fare");
++  }
++
+   const currentLabel = SCREENS.find((s) => s.id === screen)?.label;
+ 
+   function selectScreen(id) {
+@@ -127,14 +140,19 @@ export default function App() {
+       </div>
+ 
+       <div className="py-6">
+-        {screen === "booking" && <PassengerBooking />}
++        {screen === "booking" && (
++          <PassengerBooking
++            onSubmit={handleBookingFormSubmit}
++            mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
++          />
++        )}
+ 
+         {screen === "fare" && (
+           <FareEstimateScreen
+             mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
+-            pickup={DEMO_PICKUP}
+-            dropoff={DEMO_DROPOFF}
+-            scheduledTime={new Date()}
++            pickup={formSelection?.pickup ?? DEMO_PICKUP}
++            dropoff={formSelection?.dropoff ?? DEMO_DROPOFF}
++            scheduledTime={formSelection?.scheduledTime ?? new Date()}
+             fareRules={DEMO_FARE_RULES}
+             preBookingFee={3.0}
+             onConfirm={handleConfirmFare}
