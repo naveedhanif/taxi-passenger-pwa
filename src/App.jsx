@@ -6,6 +6,7 @@ import FareEstimateScreen from "./FareEstimateScreen.jsx";
 import PaymentScreen from "./PaymentScreen.jsx";
 import BookingConfirmedScreen from "./BookingConfirmedScreen.jsx";
 import GuestAccountChoice from "./GuestAccountChoice.jsx";
+import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 
 // Demo coordinates (Dublin) so FareEstimateScreen has something real to
@@ -22,6 +23,7 @@ const SCREENS = [
   { id: "payment", label: "3. Payment" },
   { id: "confirmed", label: "4. Confirmed" },
   { id: "guest-choice", label: "5. Guest/account" },
+  { id: "auth", label: "5b. Sign up/in" },
   { id: "status", label: "6. Live tracking" },
   { id: "account", label: "7. Account/history" },
 ];
@@ -125,8 +127,17 @@ export default function App() {
 
         {screen === "guest-choice" && (
           <GuestAccountChoice
-            onCreateAccount={() => alert("Would open account creation")}
+            onCreateAccount={() => setScreen("auth")}
             onDismiss={() => setScreen("status")}
+          />
+        )}
+
+        {screen === "auth" && (
+          <CustomerAuthScreen
+            driverId="00000000-0000-0000-0000-000000000000" // demo only — real app passes the actual driver's id from context
+            driverName="John's Taxi"
+            onAuthSuccess={() => setScreen("account")}
+            onBack={() => setScreen("guest-choice")}
           />
         )}
 
@@ -137,3 +148,4 @@ export default function App() {
     </div>
   );
 }
+
