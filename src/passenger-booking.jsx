@@ -136,7 +136,7 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0 }) 
           </div>
         </div>
         <button
-          className="flex h-9 w-9 items-center justify-center rounded-full"
+          className="flex h-11 w-11 items-center justify-center rounded-full"
           style={{
             background: "#F0EEE7",
             boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)",

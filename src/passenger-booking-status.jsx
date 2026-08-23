@@ -158,7 +158,7 @@ export default function BookingStatus() {
       {/* Top bar */}
       <div className="mb-5 flex items-center justify-between">
         <button
-          className="flex h-9 w-9 items-center justify-center rounded-full"
+          className="flex h-11 w-11 items-center justify-center rounded-full"
           style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
         >
           <ArrowLeft size={15} color="#5F5E5A" />
@@ -252,7 +252,7 @@ export default function BookingStatus() {
           </div>
         </div>
         <button
-          className="flex h-9 w-9 items-center justify-center rounded-full"
+          className="flex h-11 w-11 items-center justify-center rounded-full"
           style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
         >
           <Phone size={14} color="#185FA5" />
