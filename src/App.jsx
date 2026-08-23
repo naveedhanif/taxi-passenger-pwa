@@ -43,6 +43,17 @@ export default function App() {
   const [bookingError, setBookingError] = useState("");
   const [creatingBooking, setCreatingBooking] = useState(false);
 
+  // Populated when the passenger submits the booking form. Until then,
+  // the fare screen falls back to demo pickup/dropoff below.
+  const [formSelection, setFormSelection] = useState(null);
+
+  function handleBookingFormSubmit({ pickup, dropoff, date, time }) {
+    // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
+    // booking form resolves them via Mapbox before calling onSubmit.
+    setFormSelection({ pickup, dropoff, scheduledTime: new Date(`${date}T${time}`) });
+    setScreen("fare");
+  }
+
   const currentLabel = SCREENS.find((s) => s.id === screen)?.label;
 
   function selectScreen(id) {
@@ -127,14 +138,19 @@ export default function App() {
       </div>
 
       <div className="py-6">
-        {screen === "booking" && <PassengerBooking />}
+        {screen === "booking" && (
+          <PassengerBooking
+            onSubmit={handleBookingFormSubmit}
+            mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
+          />
+        )}
 
         {screen === "fare" && (
           <FareEstimateScreen
             mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
-            pickup={DEMO_PICKUP}
-            dropoff={DEMO_DROPOFF}
-            scheduledTime={new Date()}
+            pickup={formSelection?.pickup ?? DEMO_PICKUP}
+            dropoff={formSelection?.dropoff ?? DEMO_DROPOFF}
+            scheduledTime={formSelection?.scheduledTime ?? new Date()}
             fareRules={DEMO_FARE_RULES}
             preBookingFee={3.0}
             onConfirm={handleConfirmFare}

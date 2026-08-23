@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star } from "lucide-react";
+import { searchAddress } from "./mapboxClient";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -79,13 +80,119 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
   );
 }
 
-export default function PassengerBooking({ avgRating = null, reviewCount = 0 }) {
+export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [resolving, setResolving] = useState(false);
+
+  // Coordinates resolved via Mapbox geocoding once the passenger picks a
+  // suggestion (or on submit as a fallback). FareEstimateScreen needs
+  // {lat, lng, address}, not the raw typed string.
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [dropoffCoords, setDropoffCoords] = useState(null);
+  const [pickupSuggestions, setPickupSuggestions] = useState([]);
+  const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
+
+  useEffect(() => {
+    if (!mapboxToken || pickup.trim().length < 3 || (pickupCoords && pickupCoords.fullAddress === pickup)) {
+      setPickupSuggestions([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        setPickupSuggestions(await searchAddress(pickup, mapboxToken));
+      } catch {
+        setPickupSuggestions([]);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [pickup, mapboxToken]);
+
+  useEffect(() => {
+    if (!mapboxToken || dropoff.trim().length < 3 || (dropoffCoords && dropoffCoords.fullAddress === dropoff)) {
+      setDropoffSuggestions([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        setDropoffSuggestions(await searchAddress(dropoff, mapboxToken));
+      } catch {
+        setDropoffSuggestions([]);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [dropoff, mapboxToken]);
+
+  function pickPickupSuggestion(s) {
+    setPickup(s.fullAddress);
+    setPickupCoords(s);
+    setPickupSuggestions([]);
+  }
+
+  function pickDropoffSuggestion(s) {
+    setDropoff(s.fullAddress);
+    setDropoffCoords(s);
+    setDropoffSuggestions([]);
+  }
+
+  async function handleSubmit() {
+    if (!pickup.trim() || !dropoff.trim()) {
+      setFormError("Enter both a pickup and drop-off location");
+      return;
+    }
+    if (!date || !time) {
+      setFormError("Choose a date and time");
+      return;
+    }
+
+    let resolvedPickup = pickupCoords;
+    let resolvedDropoff = dropoffCoords;
+
+    // Passenger typed an address but never tapped a suggestion — resolve
+    // it now so FareEstimateScreen still gets real coordinates.
+    if (mapboxToken && (!resolvedPickup || !resolvedDropoff)) {
+      setResolving(true);
+      try {
+        if (!resolvedPickup) {
+          const results = await searchAddress(pickup, mapboxToken);
+          resolvedPickup = results[0] || null;
+        }
+        if (!resolvedDropoff) {
+          const results = await searchAddress(dropoff, mapboxToken);
+          resolvedDropoff = results[0] || null;
+        }
+      } catch {
+        setFormError("Couldn't look up those addresses — check your connection and try again");
+        setResolving(false);
+        return;
+      }
+      setResolving(false);
+    }
+
+    if (!resolvedPickup || !resolvedDropoff) {
+      setFormError(
+        mapboxToken
+          ? "Couldn't find one of those addresses — try picking a suggestion from the list"
+          : "Address lookup isn't configured yet (missing Mapbox token)"
+      );
+      return;
+    }
+
+    setFormError("");
+    onSubmit?.({
+      pickup: { lat: resolvedPickup.lat, lng: resolvedPickup.lng, address: resolvedPickup.fullAddress || pickup },
+      dropoff: { lat: resolvedDropoff.lat, lng: resolvedDropoff.lng, address: resolvedDropoff.fullAddress || dropoff },
+      date,
+      time,
+    });
+  }
 
   function useCurrentLocation() {
     if (!navigator.geolocation) {
@@ -214,43 +321,92 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0 }) 
         }}
       >
         <div className="space-y-3.5">
-          <EmbossField
-            icon={MapPin}
-            label="Pickup location"
-            placeholder="e.g. Grafton St"
-            value={pickup}
-            onChange={(e) => setPickup(e.target.value)}
-            trailing={
-              <button
-                type="button"
-                onClick={useCurrentLocation}
-                className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
-                style={{ background: "#E4E2DA", color: "#185FA5" }}
+          <div className="relative">
+            <EmbossField
+              icon={MapPin}
+              label="Pickup location"
+              placeholder="e.g. Grafton St"
+              value={pickup}
+              onChange={(e) => {
+                setPickup(e.target.value);
+                setPickupCoords(null);
+              }}
+              trailing={
+                <button
+                  type="button"
+                  onClick={useCurrentLocation}
+                  className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
+                  style={{ background: "#E4E2DA", color: "#185FA5" }}
+                >
+                  {locating ? <Loader2 size={12} className="animate-spin" /> : <LocateFixed size={12} />}
+                  {locating ? "Locating…" : "Use current"}
+                </button>
+              }
+            />
+            {pickupSuggestions.length > 0 && (
+              <div
+                className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl"
+                style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 8px 20px rgba(44,44,42,0.15)" }}
               >
-                {locating ? <Loader2 size={12} className="animate-spin" /> : <LocateFixed size={12} />}
-                {locating ? "Locating…" : "Use current"}
-              </button>
-            }
-          />
+                {pickupSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => pickPickupSuggestion(s)}
+                    className="block w-full px-4 py-2.5 text-left text-xs text-[#2C2C2A] hover:bg-[#F0EEE7]"
+                  >
+                    {s.fullAddress}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {locationError && <div className="text-[11px] text-[#A32D2D]">{locationError}</div>}
-          <EmbossField
-            icon={MapPin}
-            label="Drop-off location"
-            placeholder="e.g. Dublin Airport"
-            value={dropoff}
-            onChange={(e) => setDropoff(e.target.value)}
-          />
+          <div className="relative">
+            <EmbossField
+              icon={MapPin}
+              label="Drop-off location"
+              placeholder="e.g. Dublin Airport"
+              value={dropoff}
+              onChange={(e) => {
+                setDropoff(e.target.value);
+                setDropoffCoords(null);
+              }}
+            />
+            {dropoffSuggestions.length > 0 && (
+              <div
+                className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl"
+                style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 8px 20px rgba(44,44,42,0.15)" }}
+              >
+                {dropoffSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => pickDropoffSuggestion(s)}
+                    className="block w-full px-4 py-2.5 text-left text-xs text-[#2C2C2A] hover:bg-[#F0EEE7]"
+                  >
+                    {s.fullAddress}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <EmbossField icon={Calendar} label="Date" type="date" />
-            <EmbossField icon={Clock} label="Time" type="time" />
+            <EmbossField icon={Calendar} label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <EmbossField icon={Clock} label="Time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
         </div>
 
+        {formError && <div className="mt-3 text-[11px] text-[#A32D2D]">{formError}</div>}
+
         <button
+          type="button"
+          disabled={resolving}
+          onClick={handleSubmit}
           onMouseDown={() => setPressed(true)}
           onMouseUp={() => setPressed(false)}
           onMouseLeave={() => setPressed(false)}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-70"
           style={{
             background: "linear-gradient(135deg, #378ADD, #0C447C)",
             boxShadow: pressed
@@ -260,7 +416,15 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0 }) 
             transition: "box-shadow 0.12s ease, transform 0.08s ease",
           }}
         >
-          Get fare estimate <ArrowRight size={15} />
+          {resolving ? (
+            <>
+              <Loader2 size={15} className="animate-spin" /> Finding route…
+            </>
+          ) : (
+            <>
+              Get fare estimate <ArrowRight size={15} />
+            </>
+          )}
         </button>
       </div>
 
