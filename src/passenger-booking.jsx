@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star } from "lucide-react";
-import { searchAddress } from "./mapboxClient";
+import { searchAddress, retrieveSuggestion, createSearchSessionToken } from "./mapboxClient";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -80,7 +80,7 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
   );
 }
 
-export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken }) {
+export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken, vehicle }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
   const [pickup, setPickup] = useState("");
@@ -92,13 +92,18 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
   const [formError, setFormError] = useState("");
   const [resolving, setResolving] = useState(false);
 
-  // Coordinates resolved via Mapbox geocoding once the passenger picks a
-  // suggestion (or on submit as a fallback). FareEstimateScreen needs
-  // {lat, lng, address}, not the raw typed string.
+  // Coordinates resolved via Mapbox Search Box API once the passenger
+  // picks a suggestion. FareEstimateScreen needs {lat, lng, address},
+  // not the raw typed string or an unresolved suggestion.
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropoffCoords, setDropoffCoords] = useState(null);
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
+  // Search Box API session tokens — one per field, persisted across
+  // keystrokes within a session and regenerated after a selection is
+  // made, per Mapbox's documented session-billing pattern.
+  const [pickupSession, setPickupSession] = useState(() => createSearchSessionToken());
+  const [dropoffSession, setDropoffSession] = useState(() => createSearchSessionToken());
 
   useEffect(() => {
     if (!mapboxToken || pickup.trim().length < 3 || (pickupCoords && pickupCoords.fullAddress === pickup)) {
@@ -107,13 +112,14 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
     }
     const t = setTimeout(async () => {
       try {
-        setPickupSuggestions(await searchAddress(pickup, mapboxToken));
+        const result = await searchAddress(pickup, mapboxToken, pickupSession);
+        setPickupSuggestions(result.suggestions);
       } catch {
         setPickupSuggestions([]);
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [pickup, mapboxToken]);
+  }, [pickup, mapboxToken, pickupSession]);
 
   useEffect(() => {
     if (!mapboxToken || dropoff.trim().length < 3 || (dropoffCoords && dropoffCoords.fullAddress === dropoff)) {
@@ -122,24 +128,42 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
     }
     const t = setTimeout(async () => {
       try {
-        setDropoffSuggestions(await searchAddress(dropoff, mapboxToken));
+        const result = await searchAddress(dropoff, mapboxToken, dropoffSession);
+        setDropoffSuggestions(result.suggestions);
       } catch {
         setDropoffSuggestions([]);
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [dropoff, mapboxToken]);
+  }, [dropoff, mapboxToken, dropoffSession]);
 
-  function pickPickupSuggestion(s) {
+  async function pickPickupSuggestion(s) {
     setPickup(s.fullAddress);
-    setPickupCoords(s);
     setPickupSuggestions([]);
+    setFormError("");
+    try {
+      const coords = await retrieveSuggestion(s.mapboxId, mapboxToken, pickupSession);
+      setPickupCoords(coords ? { ...coords, fullAddress: s.fullAddress } : null);
+    } catch {
+      setPickupCoords(null);
+      setFormError("Couldn't get details for that pickup location — try again");
+    }
+    // Session ends after a selection; start a fresh one for the next search.
+    setPickupSession(createSearchSessionToken());
   }
 
-  function pickDropoffSuggestion(s) {
+  async function pickDropoffSuggestion(s) {
     setDropoff(s.fullAddress);
-    setDropoffCoords(s);
     setDropoffSuggestions([]);
+    setFormError("");
+    try {
+      const coords = await retrieveSuggestion(s.mapboxId, mapboxToken, dropoffSession);
+      setDropoffCoords(coords ? { ...coords, fullAddress: s.fullAddress } : null);
+    } catch {
+      setDropoffCoords(null);
+      setFormError("Couldn't get details for that drop-off location — try again");
+    }
+    setDropoffSession(createSearchSessionToken());
   }
 
   async function handleSubmit() {
@@ -152,43 +176,23 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
       return;
     }
 
-    let resolvedPickup = pickupCoords;
-    let resolvedDropoff = dropoffCoords;
-
-    // Passenger typed an address but never tapped a suggestion — resolve
-    // it now so FareEstimateScreen still gets real coordinates.
-    if (mapboxToken && (!resolvedPickup || !resolvedDropoff)) {
-      setResolving(true);
-      try {
-        if (!resolvedPickup) {
-          const results = await searchAddress(pickup, mapboxToken);
-          resolvedPickup = results[0] || null;
-        }
-        if (!resolvedDropoff) {
-          const results = await searchAddress(dropoff, mapboxToken);
-          resolvedDropoff = results[0] || null;
-        }
-      } catch {
-        setFormError("Couldn't look up those addresses — check your connection and try again");
-        setResolving(false);
-        return;
-      }
-      setResolving(false);
+    // Unlike the old Geocoding API, Search Box results only carry
+    // coordinates after /retrieve — so if the passenger typed an address
+    // and never tapped a suggestion, we don't have coordinates for it.
+    // Require picking from the list rather than silently guessing.
+    if (!pickupCoords || pickupCoords.fullAddress !== pickup) {
+      setFormError("Please select your pickup location from the suggestions list");
+      return;
     }
-
-    if (!resolvedPickup || !resolvedDropoff) {
-      setFormError(
-        mapboxToken
-          ? "Couldn't find one of those addresses — try picking a suggestion from the list"
-          : "Address lookup isn't configured yet (missing Mapbox token)"
-      );
+    if (!dropoffCoords || dropoffCoords.fullAddress !== dropoff) {
+      setFormError("Please select your drop-off location from the suggestions list");
       return;
     }
 
     setFormError("");
     onSubmit?.({
-      pickup: { lat: resolvedPickup.lat, lng: resolvedPickup.lng, address: resolvedPickup.fullAddress || pickup },
-      dropoff: { lat: resolvedDropoff.lat, lng: resolvedDropoff.lng, address: resolvedDropoff.fullAddress || dropoff },
+      pickup: { lat: pickupCoords.lat, lng: pickupCoords.lng, address: pickupCoords.fullAddress },
+      dropoff: { lat: dropoffCoords.lat, lng: dropoffCoords.lng, address: dropoffCoords.fullAddress },
       date,
       time,
     });
@@ -287,9 +291,11 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
           <Car size={19} color="#185FA5" />
         </div>
         <div className="flex-1">
-          <div className="text-sm font-medium text-[#2C2C2A]">Toyota Prius · Blue</div>
+          <div className="text-sm font-medium text-[#2C2C2A]">
+            {vehicle ? `${vehicle.make} ${vehicle.model} · ${vehicle.color}` : "Vehicle details unavailable"}
+          </div>
           <div className="flex items-center gap-1 text-xs text-[#5F5E5A]">
-            <Users size={12} /> 4 passenger seats
+            <Users size={12} /> {vehicle?.seats ?? "—"} passenger seats
           </div>
         </div>
         <div

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X, AlertCircle } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
@@ -9,18 +9,18 @@ import GuestAccountChoice from "./GuestAccountChoice.jsx";
 import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 import { createBooking } from "./bookingApi.js";
+import { supabase } from "./supabaseClient.js";
 
 // Demo driver id — a real deployment passes the actual driver's id
 // from the URL/QR context (e.g. resolved from the booking_slug).
-const DEMO_DRIVER_ID = "00000000-0000-0000-0000-000000000000";
+// This must be a real row in the `drivers` table with is_active = true
+// AND stripe_connect_onboarded = true, or create-booking will 404/400.
+const DEMO_DRIVER_ID = "7707c60e-24cd-4106-9eda-796ba8a3cf12";
 
 // Demo coordinates (Dublin) so FareEstimateScreen has something real to
-// call Mapbox with once VITE_MAPBOX_TOKEN is set.
+// call Mapbox with before the passenger has submitted the booking form.
 const DEMO_PICKUP = { lat: 53.3418, lng: -6.2603, address: "Grafton Street" };
 const DEMO_DROPOFF = { lat: 53.4264, lng: -6.2499, address: "Dublin Airport" };
-const DEMO_FARE_RULES = [
-  { id: "1", name: "Standard", tariff_period: "standard", base_rate: 4.4, per_km_rate: 1.32, per_minute_rate: 0.47, minimum_fare: 0, is_active: true },
-];
 
 const SCREENS = [
   { id: "booking", label: "1. Booking form" },
@@ -46,6 +46,50 @@ export default function App() {
   // Populated when the passenger submits the booking form. Until then,
   // the fare screen falls back to demo pickup/dropoff below.
   const [formSelection, setFormSelection] = useState(null);
+
+  // Real driver data — vehicle shown on the booking card, fare rules
+  // used for the estimate. Both come from Supabase, not hardcoded demo
+  // values, so the passenger actually sees this driver's real setup.
+  const [vehicle, setVehicle] = useState(null);
+  const [fareRules, setFareRules] = useState([]);
+  const [driverDataError, setDriverDataError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [vehicleRes, fareRulesRes] = await Promise.all([
+        supabase
+          .from("public_vehicle_profiles")
+          .select("make, model, color, seats")
+          .eq("driver_id", DEMO_DRIVER_ID)
+          .maybeSingle(),
+        supabase
+          .from("fare_rules")
+          .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, is_active")
+          .eq("driver_id", DEMO_DRIVER_ID)
+          .eq("is_active", true),
+      ]);
+
+      if (cancelled) return;
+
+      if (!vehicleRes.error) setVehicle(vehicleRes.data);
+      if (!fareRulesRes.error) setFareRules(fareRulesRes.data ?? []);
+
+      if (vehicleRes.error || fareRulesRes.error || !vehicleRes.data || (fareRulesRes.data ?? []).length === 0) {
+        // Surfaced in the UI rather than silently falling back to fake
+        // numbers — a driver with no fare rules set can't give an
+        // accurate estimate, and that's worth knowing about, not hiding.
+        setDriverDataError(
+          (fareRulesRes.data ?? []).length === 0
+            ? "This driver hasn't set up fare rules yet — fare estimates aren't available."
+            : "Couldn't load this driver's details."
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleBookingFormSubmit({ pickup, dropoff, date, time }) {
     // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
@@ -138,10 +182,17 @@ export default function App() {
       </div>
 
       <div className="py-6">
+        {driverDataError && (
+          <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+            <AlertCircle size={16} /> {driverDataError}
+          </div>
+        )}
+
         {screen === "booking" && (
           <PassengerBooking
             onSubmit={handleBookingFormSubmit}
             mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
+            vehicle={vehicle}
           />
         )}
 
@@ -151,7 +202,7 @@ export default function App() {
             pickup={formSelection?.pickup ?? DEMO_PICKUP}
             dropoff={formSelection?.dropoff ?? DEMO_DROPOFF}
             scheduledTime={formSelection?.scheduledTime ?? new Date()}
-            fareRules={DEMO_FARE_RULES}
+            fareRules={fareRules}
             preBookingFee={3.0}
             onConfirm={handleConfirmFare}
             onBack={() => setScreen("booking")}
@@ -204,7 +255,7 @@ export default function App() {
 
         {screen === "auth" && (
           <CustomerAuthScreen
-            driverId="00000000-0000-0000-0000-000000000000" // demo only — real app passes the actual driver's id from context
+            driverId={DEMO_DRIVER_ID}
             driverName="John's Taxi"
             onAuthSuccess={() => setScreen("account")}
             onBack={() => setScreen("guest-choice")}

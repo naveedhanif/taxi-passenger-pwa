@@ -1,55 +1,117 @@
 /**
  * Mapbox integration: address search + traffic-aware routing.
  *
- * Uses the Geocoding v5 and Directions v5 APIs (stable, well-documented,
- * not the newer v6 geocoding endpoint) — reduces risk of relying on
- * details that might shift under a newer API still in active development.
+ * Address search uses the Search Box API (/suggest + /retrieve), not the
+ * old Geocoding v5 API. Mapbox removed POI data from Geocoding v5 — see
+ * https://docs.mapbox.com/api/search/geocoding-v5/ — which is why a
+ * previous version of this file could resolve street addresses but never
+ * returned named places like "Dublin Airport". Search Box API is what
+ * Mapbox now points POI-search users to.
+ *
+ * Routing still uses the Directions v5 API, which is unaffected by that
+ * change and remains the documented way to get a driving route.
  *
  * IMPORTANT: fetch-based functions here have NOT been tested against a
  * live Mapbox endpoint — this sandbox has no network access to
- * api.mapbox.com. The pure parsing functions (parseGeocodingFeatures,
- * parseDirectionsRoute) ARE tested against realistic fixture data
- * matching Mapbox's documented response shape — see test.js. Test the
- * live fetch calls for real once you have a Mapbox token wired into
- * the actual app.
+ * api.mapbox.com. Test the live fetch calls once you have a Mapbox token
+ * wired into the actual app.
  */
 
 const MAPBOX_BASE = "https://api.mapbox.com";
 
 /**
- * Search for addresses matching a text query, biased to Ireland.
- * Use this for the pickup/dropoff autocomplete fields.
+ * Generates a session token for Search Box API billing/session-grouping.
+ * Per Mapbox's docs, a session runs from the first /suggest call to the
+ * /retrieve call — call this once per search session (e.g. once per
+ * booking-form field the user is typing into), not once per keystroke.
  */
-async function searchAddress(query, token) {
-  const url = `${MAPBOX_BASE}/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
-    `?access_token=${token}&country=ie&types=address,poi&autocomplete=true&limit=5`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Mapbox geocoding failed: ${res.status}`);
-  return parseGeocodingFeatures(await res.json());
+function createSearchSessionToken() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
-/** Turn a raw Mapbox geocoding response into a clean list of address options. */
-function parseGeocodingFeatures(json) {
-  if (!json || !Array.isArray(json.features)) return [];
-  return json.features.map((f) => ({
-    name: f.text,
-    fullAddress: f.place_name,
-    lng: f.center[0],
-    lat: f.center[1],
+/**
+ * Search for addresses AND points of interest (airports, landmarks,
+ * businesses) matching a text query, biased to Ireland. Use this for the
+ * pickup/dropoff autocomplete fields.
+ *
+ * Two-step Search Box API flow: this is step one (/suggest). Each result
+ * has a mapbox_id but NOT coordinates — call retrieveSuggestion() with the
+ * chosen result to get lat/lng, per Mapbox's documented interactive-search
+ * pattern.
+ */
+async function searchAddress(query, token, sessionToken) {
+  const session = sessionToken || createSearchSessionToken();
+  const url = `${MAPBOX_BASE}/search/searchbox/v1/suggest?q=${encodeURIComponent(query)}` +
+    `&access_token=${token}&session_token=${session}&country=ie&language=en&limit=8`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Mapbox suggest failed: ${res.status}`);
+  const json = await res.json();
+  return {
+    sessionToken: session,
+    suggestions: parseSuggestions(json),
+  };
+}
+
+/** Turn a raw Search Box /suggest response into a clean list of options. */
+function parseSuggestions(json) {
+  if (!json || !Array.isArray(json.suggestions)) return [];
+  return json.suggestions.map((s) => ({
+    mapboxId: s.mapbox_id,
+    name: s.name,
+    fullAddress: s.full_address || s.place_formatted || s.name,
+    featureType: s.feature_type,
   }));
 }
 
 /**
+ * Step two of the Search Box API flow: resolves a suggestion's mapbox_id
+ * (from searchAddress) into real coordinates. Must use the SAME
+ * sessionToken returned by searchAddress for correct session billing.
+ */
+async function retrieveSuggestion(mapboxId, token, sessionToken) {
+  const url = `${MAPBOX_BASE}/search/searchbox/v1/retrieve/${encodeURIComponent(mapboxId)}` +
+    `?access_token=${token}&session_token=${sessionToken}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Mapbox retrieve failed: ${res.status}`);
+  const json = await res.json();
+  return parseRetrieveFeature(json);
+}
+
+/** Turn a raw Search Box /retrieve response into {name, fullAddress, lat, lng}. */
+function parseRetrieveFeature(json) {
+  if (!json || !Array.isArray(json.features) || json.features.length === 0) {
+    return null;
+  }
+  const f = json.features[0];
+  const [lng, lat] = f.geometry.coordinates;
+  return {
+    name: f.properties.name,
+    fullAddress: f.properties.full_address || f.properties.place_formatted || f.properties.name,
+    lng,
+    lat,
+  };
+}
+
+/**
  * Reverse-geocode a coordinate pair into a readable address.
- * Use this for the "Use current location" GPS button.
+ * Use this for the "Use current location" GPS button. The /reverse
+ * endpoint returns coordinates directly (no /retrieve step needed).
  */
 async function reverseGeocode(lng, lat, token) {
-  const url = `${MAPBOX_BASE}/geocoding/v5/mapbox.places/${lng},${lat}.json` +
-    `?access_token=${token}&country=ie&types=address`;
+  const url = `${MAPBOX_BASE}/search/searchbox/v1/reverse?longitude=${lng}&latitude=${lat}` +
+    `&access_token=${token}&country=ie&limit=1`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Mapbox reverse geocoding failed: ${res.status}`);
-  const parsed = parseGeocodingFeatures(await res.json());
-  return parsed[0] || null;
+  const json = await res.json();
+  return parseRetrieveFeature(json);
 }
 
 /**
@@ -81,10 +143,13 @@ function parseDirectionsRoute(json) {
 }
 
 export {
+  createSearchSessionToken,
   searchAddress,
+  retrieveSuggestion,
   reverseGeocode,
   getRoute,
-  parseGeocodingFeatures,
+  parseSuggestions,
+  parseRetrieveFeature,
   parseDirectionsRoute,
 };
 
