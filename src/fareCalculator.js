@@ -47,24 +47,88 @@ function getTariffPeriod(date) {
 }
 
 /**
- * Calculates an estimated fare.
+ * Calculates an estimated fare using the NTA's official two-tier
+ * structure (see https://www.transportforireland.ie/fares/taxi-fares/):
+ *
+ *   - Initial charge: covers the first ~500m / 85 seconds (baked into
+ *     fareRule.base_rate).
+ *   - Tariff A: per_km_rate / per_minute_rate apply for the next ~15km /
+ *     43min, up to a capped total (fareRule.tariff_a_cap). Distance and
+ *     time both accrue cost simultaneously (this mirrors how a taximeter
+ *     actually runs — whichever of distance or time is "ticking" at a
+ *     given moment is what a real meter charges for, but since this is
+ *     an upfront estimate rather than a live meter, both rates are
+ *     applied across the full trip and the NTA's own online estimator
+ *     does the same simplification).
+ *   - Tariff B: once the Tariff A cost hits its cap, the higher
+ *     tariff_b_per_km_rate / tariff_b_per_minute_rate apply to whatever
+ *     distance/time remains.
+ *
+ * A driver-set discount (fareRule.discount_percent) is then applied to
+ * the ride fare only, before adding the pre-booking fee.
  *
  * @param {object} params
  * @param {number} params.distanceKm - route distance in km (from Mapbox Directions)
  * @param {number} params.durationMinutes - TRAFFIC-AWARE route duration in minutes
- *   (this is the whole trick for "fare goes up when traffic is bad" — use
- *   Mapbox's traffic-aware duration, not the free-flow one, and the existing
- *   per-minute rate naturally makes a slower trip cost more, with no extra
- *   surge-pricing logic needed)
- * @param {object} params.fareRule - a row from fare_rules (base_rate, per_km_rate, per_minute_rate, minimum_fare)
+ * @param {object} params.fareRule - a row from fare_rules (NTA-fixed rates + driver discount)
  * @param {number} params.preBookingFee - from drivers.pre_booking_fee
  * @returns {object} breakdown + total, all rounded to 2 decimals
  */
 function calculateFare({ distanceKm, durationMinutes, fareRule, preBookingFee }) {
-  const distanceCost = distanceKm * fareRule.per_km_rate;
-  const timeCost = durationMinutes * fareRule.per_minute_rate;
-  const subtotal = fareRule.base_rate + distanceCost + timeCost;
-  const beforeFees = Math.max(subtotal, fareRule.minimum_fare);
+  const {
+    base_rate: baseRate,
+    per_km_rate: tariffAKmRate,
+    per_minute_rate: tariffAMinRate,
+    minimum_fare: minimumFare,
+    tariff_a_cap: tariffACap,
+    tariff_b_per_km_rate: tariffBKmRate,
+    tariff_b_per_minute_rate: tariffBMinRate,
+  } = fareRule;
+
+  // Tariff A cost if the whole trip were charged at the Tariff A rate.
+  const tariffACost = distanceKm * tariffAKmRate + durationMinutes * tariffAMinRate;
+
+  let distanceCost;
+  let timeCost;
+  let tierBApplied = false;
+
+  // tariff_a_cap of 0 (or unset) means Tariff A doesn't apply at all for
+  // this period — go straight to Tariff B after the initial charge, per
+  // the NTA's Special Rate structure.
+  const hasTariffACap = tariffACap && tariffACap > 0;
+
+  if (!hasTariffACap || tariffACost <= tariffACap) {
+    // Entire trip fits within Tariff A (or this period has no Tariff A).
+    if (!hasTariffACap) {
+      distanceCost = distanceKm * (tariffBKmRate ?? tariffAKmRate);
+      timeCost = durationMinutes * (tariffBMinRate ?? tariffAMinRate);
+      tierBApplied = true;
+    } else {
+      distanceCost = distanceKm * tariffAKmRate;
+      timeCost = durationMinutes * tariffAMinRate;
+    }
+  } else {
+    // Trip exceeds the Tariff A cap — the portion of distance/time
+    // needed to reach the cap is charged at Tariff A; everything beyond
+    // that is charged at the higher Tariff B rate.
+    tierBApplied = true;
+    const fractionAtTariffA = tariffACap / tariffACost; // 0-1
+    const tariffADistance = distanceKm * fractionAtTariffA;
+    const tariffATime = durationMinutes * fractionAtTariffA;
+    const remainingDistance = distanceKm - tariffADistance;
+    const remainingTime = durationMinutes - tariffATime;
+
+    const tariffAPortion = tariffADistance * tariffAKmRate + tariffATime * tariffAMinRate; // == tariffACap
+    const tariffBPortion =
+      remainingDistance * (tariffBKmRate ?? tariffAKmRate) +
+      remainingTime * (tariffBMinRate ?? tariffAMinRate);
+
+    distanceCost = tariffADistance * tariffAKmRate + remainingDistance * (tariffBKmRate ?? tariffAKmRate);
+    timeCost = tariffATime * tariffAMinRate + remainingTime * (tariffBMinRate ?? tariffAMinRate);
+  }
+
+  const subtotal = baseRate + distanceCost + timeCost;
+  const beforeFees = Math.max(subtotal, minimumFare || 0);
 
   // Discount applies to the ride fare only, not the pre-booking fee —
   // set per fare_rule by the driver (fare_rules.discount_percent, 0-100).
@@ -77,10 +141,11 @@ function calculateFare({ distanceKm, durationMinutes, fareRule, preBookingFee })
   const round2 = (n) => Math.round(n * 100) / 100;
 
   return {
-    baseFare: round2(fareRule.base_rate),
+    baseFare: round2(baseRate),
     distanceCost: round2(distanceCost),
     timeCost: round2(timeCost),
-    minimumFareApplied: subtotal < fareRule.minimum_fare,
+    tierBApplied,
+    minimumFareApplied: subtotal < (minimumFare || 0),
     discountPercent,
     discountAmount: round2(discountAmount),
     preBookingFee: round2(preBookingFee),
