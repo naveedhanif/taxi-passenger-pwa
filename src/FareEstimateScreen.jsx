@@ -167,6 +167,12 @@ export default function FareEstimateScreen({
               <div className="flex justify-between"><span>Base fare</span><span>€{fare.baseFare.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Distance ({route.distanceKm} km)</span><span>€{fare.distanceCost.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Time ({Math.round(route.durationMinutes)} min)</span><span>€{fare.timeCost.toFixed(2)}</span></div>
+              {fare.discountPercent > 0 && (
+                <div className="flex justify-between" style={{ color: "#27500A" }}>
+                  <span>Discount ({fare.discountPercent}%)</span>
+                  <span>−€{fare.discountAmount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between"><span>Pre-booking fee</span><span>€{fare.preBookingFee.toFixed(2)}</span></div>
             </div>
             {fare.minimumFareApplied && (

@@ -65,7 +65,14 @@ function calculateFare({ distanceKm, durationMinutes, fareRule, preBookingFee })
   const timeCost = durationMinutes * fareRule.per_minute_rate;
   const subtotal = fareRule.base_rate + distanceCost + timeCost;
   const beforeFees = Math.max(subtotal, fareRule.minimum_fare);
-  const total = beforeFees + preBookingFee;
+
+  // Discount applies to the ride fare only, not the pre-booking fee —
+  // set per fare_rule by the driver (fare_rules.discount_percent, 0-100).
+  const discountPercent = fareRule.discount_percent || 0;
+  const discountAmount = beforeFees * (discountPercent / 100);
+  const afterDiscount = beforeFees - discountAmount;
+
+  const total = afterDiscount + preBookingFee;
 
   const round2 = (n) => Math.round(n * 100) / 100;
 
@@ -74,6 +81,8 @@ function calculateFare({ distanceKm, durationMinutes, fareRule, preBookingFee })
     distanceCost: round2(distanceCost),
     timeCost: round2(timeCost),
     minimumFareApplied: subtotal < fareRule.minimum_fare,
+    discountPercent,
+    discountAmount: round2(discountAmount),
     preBookingFee: round2(preBookingFee),
     total: round2(total),
   };

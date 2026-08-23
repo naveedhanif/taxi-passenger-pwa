@@ -64,8 +64,8 @@ export default function App() {
           .eq("driver_id", DEMO_DRIVER_ID)
           .maybeSingle(),
         supabase
-          .from("fare_rules")
-          .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, is_active")
+          .from("public_fare_rules")
+          .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, discount_percent, is_active")
           .eq("driver_id", DEMO_DRIVER_ID)
           .eq("is_active", true),
       ]);
