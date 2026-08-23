@@ -111,7 +111,12 @@ Deno.serve(async (req) => {
       `?access_token=${mapboxToken}&geometries=geojson&overview=full`
     );
     if (!directionsRes.ok) {
-      return jsonError("Couldn't calculate a route for these locations", 502);
+      const mapboxErrorBody = await directionsRes.text();
+      console.error("Mapbox directions call failed:", directionsRes.status, mapboxErrorBody);
+      return jsonError(
+        `Mapbox request failed (${directionsRes.status}): ${mapboxErrorBody}`,
+        502
+      );
     }
     const directionsJson = await directionsRes.json();
     if (!directionsJson.routes || directionsJson.routes.length === 0) {
@@ -142,7 +147,31 @@ Deno.serve(async (req) => {
       preBookingFee: driver.pre_booking_fee,
     });
 
-    // ---- Create the booking row ----
+    // ---- Create the Stripe PaymentIntent FIRST, before touching the database ----
+    // ATOMICITY NOTE: this order matters. If we inserted the booking first
+    // and Stripe failed afterward, we'd have an orphaned booking with no
+    // payment path — a real customer-facing problem requiring a retry
+    // that could create a duplicate. Creating the PaymentIntent first
+    // means the worst failure case is an unused, unconfirmed
+    // PaymentIntent if the booking insert fails afterward — and that
+    // costs nothing and charges nobody, since Stripe PaymentIntents
+    // don't move money until the customer confirms payment. This is
+    // still two separate calls, not a single database transaction, but
+    // it meaningfully reduces the blast radius of a partial failure.
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-06-20" });
+
+    const platformFeePercent = Number(Deno.env.get("PLATFORM_FEE_PERCENT") ?? "10");
+    const totalCents = eurosToStripeCents(fare.total);
+    const applicationFeeCents = Math.round(totalCents * (platformFeePercent / 100));
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: totalCents,
+      currency: "eur",
+      application_fee_amount: applicationFeeCents,
+      transfer_data: { destination: driver.stripe_connect_account_id },
+    });
+
+    // ---- Now insert the booking ONCE, with the PaymentIntent id already attached ----
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .insert({
@@ -161,39 +190,27 @@ Deno.serve(async (req) => {
         estimated_fare: fare.total,
         status: "pending",
         payment_status: "unpaid",
+        stripe_payment_intent_id: paymentIntent.id,
       })
       .select("id, access_token")
       .single();
 
     if (bookingError || !booking) {
+      // Booking insert failed AFTER Stripe succeeded — cancel the
+      // now-orphaned PaymentIntent rather than leaving it dangling
+      // indefinitely in the Stripe dashboard.
+      await stripe.paymentIntents.cancel(paymentIntent.id).catch((cancelErr) => {
+        console.error("Failed to cancel orphaned PaymentIntent:", cancelErr);
+      });
       return jsonError("Couldn't create the booking", 500);
     }
 
-    // ---- Create the Stripe PaymentIntent, routed to the driver ----
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-06-20" });
-
-    // NOTE: PLATFORM_FEE_PERCENT is a real business decision that hasn't
-    // been set by the person building this app — defaulting to 10% here
-    // ONLY so the function doesn't crash. Confirm the actual number and
-    // set it via `supabase secrets set PLATFORM_FEE_PERCENT=X` before
-    // this goes anywhere near real payments.
-    const platformFeePercent = Number(Deno.env.get("PLATFORM_FEE_PERCENT") ?? "10");
-    const totalCents = eurosToStripeCents(fare.total);
-    const applicationFeeCents = Math.round(totalCents * (platformFeePercent / 100));
-
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalCents,
-      currency: "eur",
-      application_fee_amount: applicationFeeCents,
-      transfer_data: { destination: driver.stripe_connect_account_id },
+    // Attach the booking id back onto the PaymentIntent's metadata, now
+    // that we know it — a nice-to-have for reconciliation in the
+    // Stripe dashboard, not required for the booking flow to work.
+    await stripe.paymentIntents.update(paymentIntent.id, {
       metadata: { booking_id: booking.id },
     });
-
-    // ---- Attach the PaymentIntent id to the booking ----
-    await supabase
-      .from("bookings")
-      .update({ stripe_payment_intent_id: paymentIntent.id })
-      .eq("id", booking.id);
 
     return new Response(
       JSON.stringify({
@@ -209,7 +226,10 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error(err);
-    return jsonError("Unexpected error creating the booking", 500);
+    return jsonError(
+      `Unexpected error: ${err instanceof Error ? err.message : String(err)}`,
+      500
+    );
   }
 });
 
