@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, AlertCircle } from "lucide-react";
+import { Menu, X, AlertCircle, Loader2 } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
 import FareEstimateScreen from "./FareEstimateScreen.jsx";
@@ -11,14 +11,9 @@ import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 import { createBooking } from "./bookingApi.js";
 import { supabase } from "./supabaseClient.js";
 
-// Demo driver id — a real deployment passes the actual driver's id
-// from the URL/QR context (e.g. resolved from the booking_slug).
-// This must be a real row in the `drivers` table with is_active = true
-// AND stripe_connect_onboarded = true, or create-booking will 404/400.
-const DEMO_DRIVER_ID = "7707c60e-24cd-4106-9eda-796ba8a3cf12";
-
-// Demo coordinates (Dublin) so FareEstimateScreen has something real to
-// call Mapbox with before the passenger has submitted the booking form.
+// Fallback coordinates (Dublin) — only used before the passenger has
+// submitted the booking form, so the fare screen has something to
+// initially render with.
 const DEMO_PICKUP = { lat: 53.3418, lng: -6.2603, address: "Grafton Street" };
 const DEMO_DROPOFF = { lat: 53.4264, lng: -6.2499, address: "Dublin Airport" };
 
@@ -37,6 +32,12 @@ export default function App() {
   const [screen, setScreen] = useState("booking");
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Resolved once on load from the URL slug — this IS the multi-tenant
+  // routing mechanism. null while resolving, "not_found" if the slug
+  // doesn't match any active driver.
+  const [driverId, setDriverId] = useState(null);
+  const [driverLookupStatus, setDriverLookupStatus] = useState("loading"); // loading | found | not_found | no_slug
+
   // Real booking state — populated by the actual Edge Function response,
   // not demo data. bookingResult is null until createBooking succeeds.
   const [bookingResult, setBookingResult] = useState(null);
@@ -50,6 +51,7 @@ export default function App() {
   // Real driver data — vehicle shown on the booking card, fare rules
   // used for the estimate. Both come from Supabase, not hardcoded demo
   // values, so the passenger actually sees this driver's real setup.
+  const [businessName, setBusinessName] = useState("");
   const [vehicle, setVehicle] = useState(null);
   const [fareRules, setFareRules] = useState([]);
   const [driverDataError, setDriverDataError] = useState("");
@@ -60,7 +62,45 @@ export default function App() {
   // this read can go stale between page-load and submit.
   const [isDriverAvailable, setIsDriverAvailable] = useState(true);
 
+  // Step 1: resolve the URL path (e.g. /johns-taxi) to a real driver id
+  // via booking_slug. This is what makes one deployed app work for every
+  // driver — the slug in the URL decides who the passenger is booking.
   useEffect(() => {
+    const slug = window.location.pathname.replace(/^\/+|\/+$/g, "");
+    if (!slug) {
+      setDriverLookupStatus("no_slug");
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("public_driver_profiles")
+        .select("id, business_name")
+        .eq("booking_slug", slug)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error || !data) {
+        setDriverLookupStatus("not_found");
+        return;
+      }
+
+      setDriverId(data.id);
+      setBusinessName(data.business_name || "");
+      setDriverLookupStatus("found");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Step 2: once we know the driver, load their vehicle/fare/availability
+  // and keep it live-updated.
+  useEffect(() => {
+    if (!driverId) return;
     let cancelled = false;
 
     async function loadDriverData() {
@@ -68,17 +108,17 @@ export default function App() {
         supabase
           .from("public_vehicle_profiles")
           .select("make, model, color, seats")
-          .eq("driver_id", DEMO_DRIVER_ID)
+          .eq("driver_id", driverId)
           .maybeSingle(),
         supabase
           .from("public_fare_rules")
           .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, tariff_a_cap, tariff_b_per_km_rate, tariff_b_per_minute_rate, discount_percent, is_active")
-          .eq("driver_id", DEMO_DRIVER_ID)
+          .eq("driver_id", driverId)
           .eq("is_active", true),
         supabase
           .from("public_driver_profiles")
           .select("is_available, pay_later_deposit_amount")
-          .eq("id", DEMO_DRIVER_ID)
+          .eq("id", driverId)
           .maybeSingle(),
       ]);
 
@@ -114,20 +154,20 @@ export default function App() {
     // patch individual fields, since that's simpler and none of these
     // tables change at high frequency.
     const channel = supabase
-      .channel(`passenger-driver-data-${DEMO_DRIVER_ID}`)
+      .channel(`passenger-driver-data-${driverId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "vehicles", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
+        { event: "*", schema: "public", table: "vehicles", filter: `driver_id=eq.${driverId}` },
         () => loadDriverData()
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "fare_rules", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
+        { event: "*", schema: "public", table: "fare_rules", filter: `driver_id=eq.${driverId}` },
         () => loadDriverData()
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "bookings", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
+        { event: "*", schema: "public", table: "bookings", filter: `driver_id=eq.${driverId}` },
         () => loadDriverData()
       )
       .subscribe();
@@ -136,7 +176,7 @@ export default function App() {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [driverId]);
 
   function handleBookingFormSubmit({ pickup, dropoff, date, time }) {
     // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
@@ -157,7 +197,7 @@ export default function App() {
     setCreatingBooking(true);
 
     const result = await createBooking({
-      driverId: DEMO_DRIVER_ID,
+      driverId,
       passengerName: "Sarah Kelly",
       passengerPhone: "+353 87 123 4567",
       pickup: DEMO_PICKUP,
@@ -176,6 +216,41 @@ export default function App() {
 
     setBookingResult(result);
     setScreen("payment");
+  }
+
+  // ---- Slug resolution gate: nothing below renders until we know which
+  // driver this visit is for. ----
+  if (driverLookupStatus === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F7F7F5] text-sm text-[#5F5E5A]">
+        <Loader2 size={18} className="mr-2 animate-spin" /> Loading…
+      </div>
+    );
+  }
+
+  if (driverLookupStatus === "no_slug") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[#F7F7F5] p-6 text-center">
+        <div className="text-base font-semibold text-[#2C2C2A]">No driver specified</div>
+        <div className="max-w-sm text-sm text-[#5F5E5A]">
+          This link needs a driver's booking page — e.g.{" "}
+          <code className="rounded bg-[#F0EEE7] px-1.5 py-0.5 text-xs">yoursite.com/johns-taxi</code>.
+          Ask your driver for their QR code or booking link.
+        </div>
+      </div>
+    );
+  }
+
+  if (driverLookupStatus === "not_found") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[#F7F7F5] p-6 text-center">
+        <AlertCircle size={22} className="text-[#791F1F]" />
+        <div className="text-base font-semibold text-[#2C2C2A]">Driver not found</div>
+        <div className="max-w-sm text-sm text-[#5F5E5A]">
+          This booking link doesn't match an active driver. Double-check the link or QR code with your driver.
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -313,8 +388,8 @@ export default function App() {
 
         {screen === "auth" && (
           <CustomerAuthScreen
-            driverId={DEMO_DRIVER_ID}
-            driverName="John's Taxi"
+            driverId={driverId}
+            driverName={businessName}
             onAuthSuccess={() => setScreen("account")}
             onBack={() => setScreen("guest-choice")}
           />
