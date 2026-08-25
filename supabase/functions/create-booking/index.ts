@@ -16,10 +16,22 @@
 //             lets the driver mark payment_method + mark the balance
 //             collected once the trip completes.
 //
+// BOOKING VISIBILITY: this function creates a Stripe PaymentIntent but
+// does NOT charge the card — the passenger confirms payment on the next
+// screen. A booking must not appear on the driver's dashboard, and must
+// not lock the driver's availability, until that payment (or deposit)
+// has actually succeeded. So bookings are inserted with
+// status="awaiting_payment" here; confirm-booking-payment/index.ts
+// flips it to "pending" only after independently verifying with Stripe
+// that the PaymentIntent succeeded. See public_driver_profiles and
+// AllBookingsScreen/OverviewDashboard for the matching exclusion of
+// awaiting_payment from what a driver sees as an active booking.
+//
 // AVAILABILITY: a driver with any booking in an active state
-// (confirmed/en_route/arrived/in_progress) is treated as busy and
-// rejected here — this is enforced server-side, not just hidden in the
-// UI, since a client could otherwise race a stale "available" state.
+// (pending/confirmed/en_route/arrived/in_progress — NOT
+// awaiting_payment) is treated as busy and rejected here — enforced
+// server-side, not just hidden in the UI, since a client could
+// otherwise race a stale "available" state.
 //
 // Deploy: supabase functions deploy create-booking
 // Required secrets (supabase secrets set):
@@ -43,7 +55,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ACTIVE_BOOKING_STATUSES = ["confirmed", "en_route", "arrived", "in_progress"];
+// Excludes "awaiting_payment" deliberately — see BOOKING VISIBILITY note
+// above. A booking only becomes "pending" (and therefore visible/
+// availability-locking) once payment is confirmed.
+const ACTIVE_BOOKING_STATUSES = ["pending", "confirmed", "en_route", "arrived", "in_progress"];
 
 interface BookingRequest {
   driver_id: string;
@@ -262,7 +277,11 @@ Deno.serve(async (req) => {
         scheduled_time: body.scheduled_time,
         distance_km: distanceKm,
         estimated_fare: fare.total,
-        status: "pending",
+        // Not yet visible to the driver and doesn't lock availability —
+        // becomes "pending" only once confirm-booking-payment verifies
+        // with Stripe that payment actually succeeded. See the
+        // BOOKING VISIBILITY note at the top of this file.
+        status: "awaiting_payment",
         payment_status: "unpaid",
         payment_timing: body.payment_timing,
         // For "later" bookings, payment_method/balance_collected are set
