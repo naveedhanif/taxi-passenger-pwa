@@ -16,6 +16,32 @@ import { ShieldCheck, ArrowRight, AlertCircle } from "lucide-react";
  * supabase/functions/create-booking/index.ts.
  */
 
+// loadStripe() must be called exactly ONCE, outside the component render
+// path — not on every render inside PaymentScreen. Calling it per-render
+// creates a brand new Stripe instance each time, which React then feeds
+// into <Elements stripe={...}> as a "changed" prop. Stripe explicitly
+// rejects that ("You cannot change the stripe prop after setting it"),
+// and the mismatch between the old mounted PaymentElement and the new
+// Stripe instance is exactly what caused confirmPayment() to fail with
+// "elements should have a mounted Payment Element" — the button then
+// sits on "Processing..." forever because the promise it's awaiting
+// never resolves cleanly.
+//
+// This module-level cache also correctly handles a key that's genuinely
+// unset on first render (falls back once state/props settle) without
+// creating a new Stripe instance for every intermediate render.
+let stripePromiseCache = null;
+let stripePromiseCacheKey = null;
+function getStripePromise(publishableKey) {
+  if (!publishableKey) return null;
+  if (stripePromiseCache && stripePromiseCacheKey === publishableKey) {
+    return stripePromiseCache;
+  }
+  stripePromiseCache = loadStripe(publishableKey);
+  stripePromiseCacheKey = publishableKey;
+  return stripePromiseCache;
+}
+
 function useGoogleFont() {
   useEffect(() => {
     const link = document.createElement("link");
@@ -183,7 +209,7 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, book
     );
   }
 
-  const stripePromise = loadStripe(stripePublishableKey);
+  const stripePromise = getStripePromise(stripePublishableKey);
 
   const appearance = {
     theme: "stripe",
