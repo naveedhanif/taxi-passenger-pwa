@@ -59,6 +59,7 @@ export default function App() {
   const [avgRating, setAvgRating] = useState(null);
   const [reviewCount, setReviewCount] = useState(0);
   const [licenceVerified, setLicenceVerified] = useState(false);
+  const [driverPhoneNumber, setDriverPhoneNumber] = useState(null);
   // Live availability — a driver with an active trip is hidden from new
   // bookings. This is a UX convenience (skip the wasted trip through the
   // form); create-booking re-checks this server-side regardless, since
@@ -120,7 +121,7 @@ export default function App() {
           .eq("is_active", true),
         supabase
           .from("public_driver_profiles")
-          .select("is_available, pay_later_deposit_amount, avg_rating, review_count, licence_verified")
+          .select("is_available, pay_later_deposit_amount, avg_rating, review_count, licence_verified, phone_number")
           .eq("id", driverId)
           .maybeSingle(),
       ]);
@@ -135,6 +136,7 @@ export default function App() {
         setAvgRating(profileRes.data.avg_rating != null ? Number(profileRes.data.avg_rating) : null);
         setReviewCount(Number(profileRes.data.review_count ?? 0));
         setLicenceVerified(Boolean(profileRes.data.licence_verified));
+        setDriverPhoneNumber(profileRes.data.phone_number ?? null);
       }
 
       if (vehicleRes.error || fareRulesRes.error || !vehicleRes.data || (fareRulesRes.data ?? []).length === 0) {
@@ -382,11 +384,13 @@ export default function App() {
 
         {screen === "confirmed" && (
           <BookingConfirmedScreen
-            pickup={DEMO_PICKUP}
-            dropoff={DEMO_DROPOFF}
-            scheduledTime={new Date()}
+            pickup={formSelection?.pickup ?? DEMO_PICKUP}
+            dropoff={formSelection?.dropoff ?? DEMO_DROPOFF}
+            scheduledTime={formSelection?.scheduledTime ?? new Date()}
             totalPaid={bookingResult?.paymentTiming === "later" ? bookingResult?.depositAmount ?? 0 : bookingResult?.fare?.total ?? 0}
             balanceDue={bookingResult?.paymentTiming === "later" ? bookingResult?.balanceDue : null}
+            driverName={businessName}
+            driverPhoneNumber={driverPhoneNumber}
             onViewBooking={() => setScreen("status")}
           />
         )}

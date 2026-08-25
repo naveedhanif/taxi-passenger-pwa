@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { CheckCircle2, MapPin, Calendar, Clock, ArrowRight } from "lucide-react";
+import { CheckCircle2, MapPin, Calendar, Clock, ArrowRight, Phone, MessageCircle } from "lucide-react";
+import { formatPhoneForLinks } from "./phoneLinks.js";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -18,10 +19,13 @@ function useGoogleFont() {
  * @param {Date} props.scheduledTime
  * @param {number} props.totalPaid
  * @param {number|null} [props.balanceDue] - remaining amount owed to the driver directly (pay-later bookings only)
+ * @param {string} [props.driverName]
+ * @param {string|null} [props.driverPhoneNumber]
  * @param {function} props.onViewBooking - go to the live tracking screen
  */
-export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime, totalPaid, balanceDue, onViewBooking }) {
+export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime, totalPaid, balanceDue, driverName, driverPhoneNumber, onViewBooking }) {
   useGoogleFont();
+  const phoneLinks = formatPhoneForLinks(driverPhoneNumber);
 
   const dateLabel = scheduledTime.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   const timeLabel = scheduledTime.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -77,6 +81,35 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
           </div>
         )}
       </div>
+
+      {phoneLinks && (
+        <div
+          className="mb-6 w-full rounded-xl p-4"
+          style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+        >
+          <div className="mb-2 text-left text-xs font-medium text-[#5F5E5A]">
+            Need to reach {driverName || "your driver"}?
+          </div>
+          <div className="flex gap-2">
+            <a
+              href={`tel:${phoneLinks.tel}`}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-[#2C2C2A]"
+              style={{ background: "#F0EEE7", boxShadow: "2px 2px 5px rgba(44,44,42,0.1), -2px -2px 5px rgba(255,255,255,0.7)" }}
+            >
+              <Phone size={13} /> Call
+            </a>
+            <a
+              href={`https://wa.me/${phoneLinks.whatsapp}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-white"
+              style={{ background: "#25D366" }}
+            >
+              <MessageCircle size={13} /> WhatsApp
+            </a>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={onViewBooking}
