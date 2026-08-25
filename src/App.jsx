@@ -56,6 +56,8 @@ export default function App() {
   const [fareRules, setFareRules] = useState([]);
   const [driverDataError, setDriverDataError] = useState("");
   const [payLaterDepositAmount, setPayLaterDepositAmount] = useState(5.0);
+  const [avgRating, setAvgRating] = useState(null);
+  const [reviewCount, setReviewCount] = useState(0);
   // Live availability — a driver with an active trip is hidden from new
   // bookings. This is a UX convenience (skip the wasted trip through the
   // form); create-booking re-checks this server-side regardless, since
@@ -117,7 +119,7 @@ export default function App() {
           .eq("is_active", true),
         supabase
           .from("public_driver_profiles")
-          .select("is_available, pay_later_deposit_amount")
+          .select("is_available, pay_later_deposit_amount, avg_rating, review_count")
           .eq("id", driverId)
           .maybeSingle(),
       ]);
@@ -129,6 +131,8 @@ export default function App() {
       if (!profileRes.error && profileRes.data) {
         setIsDriverAvailable(profileRes.data.is_available);
         setPayLaterDepositAmount(Number(profileRes.data.pay_later_deposit_amount ?? 5));
+        setAvgRating(profileRes.data.avg_rating != null ? Number(profileRes.data.avg_rating) : null);
+        setReviewCount(Number(profileRes.data.review_count ?? 0));
       }
 
       if (vehicleRes.error || fareRulesRes.error || !vehicleRes.data || (fareRulesRes.data ?? []).length === 0) {
@@ -322,6 +326,9 @@ export default function App() {
             onSubmit={handleBookingFormSubmit}
             mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
             vehicle={vehicle}
+            businessName={businessName}
+            avgRating={avgRating}
+            reviewCount={reviewCount}
           />
         )}
 

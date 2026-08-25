@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star } from "lucide-react";
-import { searchAddress, retrieveSuggestion, createSearchSessionToken } from "./mapboxClient";
+import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -80,7 +80,7 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
   );
 }
 
-export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken, vehicle }) {
+export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken, vehicle, businessName, driverIsNew }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
   const [pickup, setPickup] = useState("");
@@ -206,12 +206,19 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
     setLocating(true);
     setLocationError("");
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        // In the real app this coordinate pair gets reverse-geocoded via
-        // Mapbox into a readable address. Showing coordinates here as a
-        // placeholder since this mockup has no live Mapbox key.
+      async (pos) => {
         const { latitude, longitude } = pos.coords;
-        setPickup(`Current location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+        try {
+          const result = await reverseGeocode(longitude, latitude, mapboxToken);
+          if (result) {
+            setPickup(result.fullAddress);
+            setPickupCoords({ ...result, fullAddress: result.fullAddress });
+          } else {
+            setLocationError("Couldn't find an address for your location — enter it manually");
+          }
+        } catch {
+          setLocationError("Couldn't look up your address — enter it manually");
+        }
         setLocating(false);
       },
       () => {
@@ -241,7 +248,7 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
           </div>
           <div>
             <div className="text-sm font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-              John's Taxi
+              {businessName || "Loading…"}
             </div>
             <div className="text-[11px] text-[#5F5E5A]">Dublin, IE</div>
           </div>
@@ -268,7 +275,7 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
           ahead of time.
         </div>
         <div className="mt-1.5 text-sm text-[#5F5E5A]">
-          Pre-book with John — no app to download, just a quick form.
+          Pre-book with {businessName ? businessName.split(" ")[0] : "your driver"} — no app to download, just a quick form.
         </div>
       </div>
 
