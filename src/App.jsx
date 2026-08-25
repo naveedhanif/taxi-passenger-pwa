@@ -411,7 +411,42 @@ export default function App() {
 
         {screen === "account" && <AccountHistoryScreen />}
       </div>
+
+      {/* Version badge — small, fixed, out of the way. Exists purely so
+          you can glance at the app and confirm which deployed commit
+          you're actually testing, rather than guessing from the UI or
+          re-checking Vercel's dashboard every time. Tap it to copy the
+          full commit SHA (useful when reporting a bug tied to an exact
+          build). See vite.config.ts for how these values are injected. */}
+      <VersionBadge />
     </div>
+  );
+}
+
+function VersionBadge() {
+  const [copied, setCopied] = useState(false);
+  const sha = typeof __APP_COMMIT_SHA__ !== "undefined" ? __APP_COMMIT_SHA__ : "local";
+  const buildTime = typeof __APP_BUILD_TIME__ !== "undefined" ? __APP_BUILD_TIME__ : "";
+  const buildLabel = buildTime
+    ? new Date(buildTime).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  function handleClick() {
+    navigator.clipboard?.writeText(sha).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="fixed bottom-2 right-2 z-50 rounded-full px-2.5 py-1 text-[10px] font-mono opacity-60 hover:opacity-100 transition-opacity"
+      style={{ background: "#2C2C2A", color: "#F0EEE7" }}
+      title="Tap to copy full commit SHA"
+    >
+      {copied ? "copied!" : `${sha}${buildLabel ? ` · ${buildLabel}` : ""}`}
+    </button>
   );
 }
 
