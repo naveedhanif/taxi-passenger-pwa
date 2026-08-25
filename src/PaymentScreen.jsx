@@ -73,7 +73,17 @@ function PaymentForm({ amount, paymentTiming, balanceDue, onSuccess }) {
         className="rounded-xl p-4"
         style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
       >
-        <PaymentElement />
+        <PaymentElement
+          options={{
+            // "auto" (the default) already shows Apple Pay / Google Pay
+            // when the browser/device supports it AND the domain is
+            // registered with Stripe (see register-payment-domain
+            // function) — being explicit here so it's clear this isn't
+            // accidental, and so wallets are never silently suppressed
+            // by a future options change.
+            wallets: { applePay: "auto", googlePay: "auto" },
+          }}
+        />
       </div>
 
       {errorMessage && (

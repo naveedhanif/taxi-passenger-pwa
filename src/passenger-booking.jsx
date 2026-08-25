@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
 
 function useGoogleFont() {
@@ -87,6 +87,9 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
   const [dropoff, setDropoff] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [passengerName, setPassengerName] = useState("");
+  const [passengerPhone, setPassengerPhone] = useState("");
+  const [passengerEmail, setPassengerEmail] = useState("");
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [formError, setFormError] = useState("");
@@ -167,6 +170,10 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
   }
 
   async function handleSubmit() {
+    if (!passengerName.trim() || !passengerPhone.trim()) {
+      setFormError("Enter your name and phone number");
+      return;
+    }
     if (!pickup.trim() || !dropoff.trim()) {
       setFormError("Enter both a pickup and drop-off location");
       return;
@@ -191,6 +198,13 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
 
     setFormError("");
     onSubmit?.({
+      passengerName: passengerName.trim(),
+      passengerPhone: passengerPhone.trim(),
+      // Optional — only used so Stripe can email a receipt. A guest who
+      // skips it still completes the booking fine, they just won't get
+      // an emailed receipt (Stripe's PaymentIntent.receipt_email is
+      // simply omitted server-side in that case).
+      passengerEmail: passengerEmail.trim() || null,
       pickup: { lat: pickupCoords.lat, lng: pickupCoords.lng, address: pickupCoords.fullAddress },
       dropoff: { lat: dropoffCoords.lat, lng: dropoffCoords.lng, address: dropoffCoords.fullAddress },
       date,
@@ -334,6 +348,31 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
         }}
       >
         <div className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-3">
+            <EmbossField
+              icon={User}
+              label="Your name"
+              placeholder="Jane Doe"
+              value={passengerName}
+              onChange={(e) => setPassengerName(e.target.value)}
+            />
+            <EmbossField
+              icon={Phone}
+              label="Phone"
+              type="tel"
+              placeholder="+353 87 000 0000"
+              value={passengerPhone}
+              onChange={(e) => setPassengerPhone(e.target.value)}
+            />
+          </div>
+          <EmbossField
+            icon={Mail}
+            label="Email (optional — for your receipt)"
+            type="email"
+            placeholder="you@example.com"
+            value={passengerEmail}
+            onChange={(e) => setPassengerEmail(e.target.value)}
+          />
           <div className="relative">
             <EmbossField
               icon={MapPin}

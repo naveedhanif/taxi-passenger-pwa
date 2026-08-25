@@ -49,6 +49,7 @@ interface BookingRequest {
   driver_id: string;
   passenger_name: string;
   passenger_phone: string;
+  passenger_email?: string | null;
   pickup_address: string;
   pickup_lat: number;
   pickup_lng: number;
@@ -220,14 +221,26 @@ Deno.serve(async (req) => {
     const chargeNowCents = eurosToStripeCents(chargeNowAmount);
     const applicationFeeCents = Math.round(chargeNowCents * (platformFeePercent / 100));
 
+    // Basic format guard — a malformed value here isn't a security issue
+    // (Stripe validates server-side too), but catching it early gives a
+    // clearer error than an opaque Stripe rejection.
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const receiptEmail =
+      body.passenger_email && emailPattern.test(body.passenger_email) ? body.passenger_email : undefined;
+
     // A pay-later deposit still goes through Connect the same way a full
     // fare does — it's real money changing hands now, just a smaller
     // amount, and the driver still owes the platform its cut of it.
+    //
+    // receipt_email: if provided, Stripe automatically emails a receipt
+    // once this PaymentIntent succeeds — no separate email-sending code
+    // needed on our side. See https://docs.stripe.com/receipts.
     const paymentIntent = await stripe.paymentIntents.create({
       amount: chargeNowCents,
       currency: "eur",
       application_fee_amount: applicationFeeCents,
       transfer_data: { destination: driver.stripe_connect_account_id },
+      receipt_email: receiptEmail,
       metadata: { payment_purpose: payLater ? "pay_later_deposit" : "full_fare" },
     });
 
@@ -239,6 +252,7 @@ Deno.serve(async (req) => {
         customer_id: customerId,
         passenger_name: body.passenger_name,
         passenger_phone: body.passenger_phone,
+        passenger_email: receiptEmail ?? null,
         pickup_address: body.pickup_address,
         pickup_lat: body.pickup_lat,
         pickup_lng: body.pickup_lng,

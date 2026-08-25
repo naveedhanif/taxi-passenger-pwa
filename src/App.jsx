@@ -182,10 +182,10 @@ export default function App() {
     };
   }, [driverId]);
 
-  function handleBookingFormSubmit({ pickup, dropoff, date, time }) {
+  function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, date, time }) {
     // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
     // booking form resolves them via Mapbox before calling onSubmit.
-    setFormSelection({ pickup, dropoff, scheduledTime: new Date(`${date}T${time}`) });
+    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, scheduledTime: new Date(`${date}T${time}`) });
     setScreen("fare");
   }
 
@@ -202,11 +202,12 @@ export default function App() {
 
     const result = await createBooking({
       driverId,
-      passengerName: "Sarah Kelly",
-      passengerPhone: "+353 87 123 4567",
-      pickup: DEMO_PICKUP,
-      dropoff: DEMO_DROPOFF,
-      scheduledTime: new Date(),
+      passengerName: formSelection?.passengerName || "",
+      passengerPhone: formSelection?.passengerPhone || "",
+      passengerEmail: formSelection?.passengerEmail || null,
+      pickup: formSelection?.pickup ?? DEMO_PICKUP,
+      dropoff: formSelection?.dropoff ?? DEMO_DROPOFF,
+      scheduledTime: formSelection?.scheduledTime ?? new Date(),
       paymentTiming: paymentTiming || "now",
       accessToken: null, // null = guest booking; pass a real session token for signed-in customers
     });

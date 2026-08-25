@@ -14,6 +14,7 @@
  * @param {string} params.driverId
  * @param {string} params.passengerName
  * @param {string} params.passengerPhone
+ * @param {string|null} [params.passengerEmail] - optional; if provided, Stripe emails a receipt to this address on successful payment
  * @param {{address:string, lat:number, lng:number}} params.pickup
  * @param {{address:string, lat:number, lng:number}} params.dropoff
  * @param {Date} params.scheduledTime
@@ -21,7 +22,7 @@
  * @param {string|null} params.accessToken - the signed-in user's Supabase session token, if any; omit for guest bookings
  * @returns {Promise<{bookingId, accessToken, clientSecret, fare, distanceKm, durationMinutes, tariffPeriod, paymentTiming, depositAmount, balanceDue} | {error: string}>}
  */
-export async function createBooking({ driverId, passengerName, passengerPhone, pickup, dropoff, scheduledTime, paymentTiming, accessToken }) {
+export async function createBooking({ driverId, passengerName, passengerPhone, passengerEmail, pickup, dropoff, scheduledTime, paymentTiming, accessToken }) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -39,6 +40,7 @@ export async function createBooking({ driverId, passengerName, passengerPhone, p
       driver_id: driverId,
       passenger_name: passengerName,
       passenger_phone: passengerPhone,
+      passenger_email: passengerEmail || null,
       pickup_address: pickup.address,
       pickup_lat: pickup.lat,
       pickup_lng: pickup.lng,
