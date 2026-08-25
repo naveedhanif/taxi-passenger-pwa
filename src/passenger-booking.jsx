@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
 
 function useGoogleFont() {
@@ -80,7 +80,7 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
   );
 }
 
-export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken, vehicle, businessName, driverIsNew }) {
+export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken, vehicle, businessName, licenceVerified = false }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
   const [pickup, setPickup] = useState("");
@@ -261,8 +261,20 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
             <Navigation size={17} color="#185FA5" />
           </div>
           <div>
-            <div className="text-sm font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-              {businessName || "Loading…"}
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+                {businessName || "Loading…"}
+              </span>
+              {licenceVerified && (
+                <span
+                  className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5"
+                  style={{ background: "#EAF3DE" }}
+                  title="This driver's SPSV licence has been verified against the National Transport Authority's public register"
+                >
+                  <ShieldCheck size={10} color="#27500A" />
+                  <span className="text-[9px] font-semibold" style={{ color: "#27500A" }}>Verified</span>
+                </span>
+              )}
             </div>
             <div className="text-[11px] text-[#5F5E5A]">Dublin, IE</div>
           </div>

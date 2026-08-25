@@ -58,6 +58,7 @@ export default function App() {
   const [payLaterDepositAmount, setPayLaterDepositAmount] = useState(5.0);
   const [avgRating, setAvgRating] = useState(null);
   const [reviewCount, setReviewCount] = useState(0);
+  const [licenceVerified, setLicenceVerified] = useState(false);
   // Live availability — a driver with an active trip is hidden from new
   // bookings. This is a UX convenience (skip the wasted trip through the
   // form); create-booking re-checks this server-side regardless, since
@@ -119,7 +120,7 @@ export default function App() {
           .eq("is_active", true),
         supabase
           .from("public_driver_profiles")
-          .select("is_available, pay_later_deposit_amount, avg_rating, review_count")
+          .select("is_available, pay_later_deposit_amount, avg_rating, review_count, licence_verified")
           .eq("id", driverId)
           .maybeSingle(),
       ]);
@@ -133,6 +134,7 @@ export default function App() {
         setPayLaterDepositAmount(Number(profileRes.data.pay_later_deposit_amount ?? 5));
         setAvgRating(profileRes.data.avg_rating != null ? Number(profileRes.data.avg_rating) : null);
         setReviewCount(Number(profileRes.data.review_count ?? 0));
+        setLicenceVerified(Boolean(profileRes.data.licence_verified));
       }
 
       if (vehicleRes.error || fareRulesRes.error || !vehicleRes.data || (fareRulesRes.data ?? []).length === 0) {
@@ -330,6 +332,7 @@ export default function App() {
             businessName={businessName}
             avgRating={avgRating}
             reviewCount={reviewCount}
+            licenceVerified={licenceVerified}
           />
         )}
 
