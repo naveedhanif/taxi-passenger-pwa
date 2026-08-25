@@ -56,7 +56,8 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    async function loadDriverData() {
       const [vehicleRes, fareRulesRes] = await Promise.all([
         supabase
           .from("public_vehicle_profiles")
@@ -65,7 +66,7 @@ export default function App() {
           .maybeSingle(),
         supabase
           .from("public_fare_rules")
-          .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, discount_percent, is_active")
+          .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, tariff_a_cap, tariff_b_per_km_rate, tariff_b_per_minute_rate, discount_percent, is_active")
           .eq("driver_id", DEMO_DRIVER_ID)
           .eq("is_active", true),
       ]);
@@ -84,10 +85,35 @@ export default function App() {
             ? "This driver hasn't set up fare rules yet — fare estimates aren't available."
             : "Couldn't load this driver's details."
         );
+      } else {
+        setDriverDataError("");
       }
-    })();
+    }
+
+    loadDriverData();
+
+    // Live updates: if the driver changes their vehicle or fare rules
+    // (incl. discount) in the dashboard, passengers already on this page
+    // see it immediately — no refresh needed. Re-fetches both together
+    // on any change rather than trying to patch individual fields, since
+    // that's simpler and this isn't a high-frequency table.
+    const channel = supabase
+      .channel(`passenger-driver-data-${DEMO_DRIVER_ID}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
+        () => loadDriverData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "fare_rules", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
+        () => loadDriverData()
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, []);
 
