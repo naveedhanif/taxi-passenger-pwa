@@ -366,6 +366,7 @@ export default function App() {
           <PaymentScreen
             stripePublishableKey={import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY}
             clientSecret={bookingResult.clientSecret}
+            bookingId={bookingResult.bookingId}
             amount={bookingResult.paymentTiming === "later" ? bookingResult.depositAmount : bookingResult.fare.total}
             paymentTiming={bookingResult.paymentTiming}
             balanceDue={bookingResult.balanceDue}

@@ -26,7 +26,7 @@ function useGoogleFont() {
   }, []);
 }
 
-function PaymentForm({ amount, paymentTiming, balanceDue, onSuccess }) {
+function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
@@ -51,6 +51,39 @@ function PaymentForm({ amount, paymentTiming, balanceDue, onSuccess }) {
     }
 
     if (paymentIntent && paymentIntent.status === "succeeded") {
+      // Stripe confirms success client-side, but the booking only
+      // becomes visible to the driver / counts toward availability once
+      // the server independently re-verifies with Stripe — never trust
+      // this client-side result alone. See
+      // supabase/functions/confirm-booking-payment/index.ts.
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const res = await fetch(`${supabaseUrl}/functions/v1/confirm-booking-payment`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${anonKey}`,
+            apikey: anonKey,
+          },
+          body: JSON.stringify({ booking_id: bookingId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.confirmed) {
+          setErrorMessage(
+            "Your payment went through, but we couldn't confirm your booking — please contact support with your booking reference."
+          );
+          setSubmitting(false);
+          return;
+        }
+      } catch {
+        setErrorMessage(
+          "Your payment went through, but we couldn't confirm your booking — please contact support with your booking reference."
+        );
+        setSubmitting(false);
+        return;
+      }
+
       onSuccess(paymentIntent);
     } else {
       setSubmitting(false);
@@ -118,12 +151,13 @@ function PaymentForm({ amount, paymentTiming, balanceDue, onSuccess }) {
  * @param {object} props
  * @param {string} props.stripePublishableKey
  * @param {string} props.clientSecret - from the create-booking Edge Function
+ * @param {string} props.bookingId - the booking's id, needed to confirm payment server-side after Stripe succeeds
  * @param {number} props.amount - what's being charged right now, in euros (full fare, or just the deposit for pay-later)
  * @param {"now"|"later"} [props.paymentTiming]
  * @param {number|null} [props.balanceDue] - remaining amount owed to the driver directly, when paymentTiming is "later"
- * @param {function} props.onSuccess - called with the Stripe PaymentIntent once payment succeeds
+ * @param {function} props.onSuccess - called with the Stripe PaymentIntent once payment succeeds AND is server-confirmed
  */
-export default function PaymentScreen({ stripePublishableKey, clientSecret, amount, paymentTiming, balanceDue, onSuccess }) {
+export default function PaymentScreen({ stripePublishableKey, clientSecret, bookingId, amount, paymentTiming, balanceDue, onSuccess }) {
   useGoogleFont();
 
   if (!stripePublishableKey) {
@@ -166,7 +200,7 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, amou
     <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 500 }}>
       <div className="mb-5 text-sm font-semibold text-[#2C2C2A]">Payment</div>
       <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
-        <PaymentForm amount={amount} paymentTiming={paymentTiming} balanceDue={balanceDue} onSuccess={onSuccess} />
+        <PaymentForm amount={amount} paymentTiming={paymentTiming} balanceDue={balanceDue} bookingId={bookingId} onSuccess={onSuccess} />
       </Elements>
     </div>
   );
