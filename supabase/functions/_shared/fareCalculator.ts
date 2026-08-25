@@ -43,6 +43,10 @@ export interface FareRule {
   per_km_rate: number;
   per_minute_rate: number;
   minimum_fare: number;
+  tariff_a_cap: number | null;
+  tariff_b_per_km_rate: number | null;
+  tariff_b_per_minute_rate: number | null;
+  discount_percent: number;
   is_active: boolean;
 }
 
@@ -63,11 +67,18 @@ export interface FareBreakdown {
   baseFare: number;
   distanceCost: number;
   timeCost: number;
+  tierBApplied: boolean;
   minimumFareApplied: boolean;
+  discountPercent: number;
+  discountAmount: number;
   preBookingFee: number;
   total: number;
 }
 
+// Mirrors fareCalculator.js exactly (the NTA two-tier structure — see
+// that file's comments for the full explanation). Kept in sync
+// manually since this Deno function can't import the frontend's .js
+// file directly; if you change the fare math, change both places.
 export function calculateFare(params: {
   distanceKm: number;
   durationMinutes: number;
@@ -75,19 +86,64 @@ export function calculateFare(params: {
   preBookingFee: number;
 }): FareBreakdown {
   const { distanceKm, durationMinutes, fareRule, preBookingFee } = params;
-  const distanceCost = distanceKm * fareRule.per_km_rate;
-  const timeCost = durationMinutes * fareRule.per_minute_rate;
-  const subtotal = fareRule.base_rate + distanceCost + timeCost;
-  const beforeFees = Math.max(subtotal, fareRule.minimum_fare);
-  const total = beforeFees + preBookingFee;
+  const {
+    base_rate: baseRate,
+    per_km_rate: tariffAKmRate,
+    per_minute_rate: tariffAMinRate,
+    minimum_fare: minimumFare,
+    tariff_a_cap: tariffACap,
+    tariff_b_per_km_rate: tariffBKmRate,
+    tariff_b_per_minute_rate: tariffBMinRate,
+  } = fareRule;
+
+  const tariffACost = distanceKm * tariffAKmRate + durationMinutes * tariffAMinRate;
+
+  let distanceCost: number;
+  let timeCost: number;
+  let tierBApplied = false;
+
+  const hasTariffACap = tariffACap && tariffACap > 0;
+
+  if (!hasTariffACap || tariffACost <= tariffACap) {
+    if (!hasTariffACap) {
+      distanceCost = distanceKm * (tariffBKmRate ?? tariffAKmRate);
+      timeCost = durationMinutes * (tariffBMinRate ?? tariffAMinRate);
+      tierBApplied = true;
+    } else {
+      distanceCost = distanceKm * tariffAKmRate;
+      timeCost = durationMinutes * tariffAMinRate;
+    }
+  } else {
+    tierBApplied = true;
+    const fractionAtTariffA = tariffACap / tariffACost;
+    const tariffADistance = distanceKm * fractionAtTariffA;
+    const tariffATime = durationMinutes * fractionAtTariffA;
+    const remainingDistance = distanceKm - tariffADistance;
+    const remainingTime = durationMinutes - tariffATime;
+
+    distanceCost = tariffADistance * tariffAKmRate + remainingDistance * (tariffBKmRate ?? tariffAKmRate);
+    timeCost = tariffATime * tariffAMinRate + remainingTime * (tariffBMinRate ?? tariffAMinRate);
+  }
+
+  const subtotal = baseRate + distanceCost + timeCost;
+  const beforeFees = Math.max(subtotal, minimumFare || 0);
+
+  const discountPercent = fareRule.discount_percent || 0;
+  const discountAmount = beforeFees * (discountPercent / 100);
+  const afterDiscount = beforeFees - discountAmount;
+
+  const total = afterDiscount + preBookingFee;
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
   return {
-    baseFare: round2(fareRule.base_rate),
+    baseFare: round2(baseRate),
     distanceCost: round2(distanceCost),
     timeCost: round2(timeCost),
-    minimumFareApplied: subtotal < fareRule.minimum_fare,
+    tierBApplied,
+    minimumFareApplied: subtotal < (minimumFare || 0),
+    discountPercent,
+    discountAmount: round2(discountAmount),
     preBookingFee: round2(preBookingFee),
     total: round2(total),
   };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Clock, Route as RouteIcon, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { MapPin, Clock, Route as RouteIcon, ArrowRight, Loader2, AlertCircle, CreditCard, Banknote } from "lucide-react";
 import { getRoute } from "./mapboxClient";
 import { getTariffPeriod, calculateFare, selectFareRule } from "./fareCalculator";
 import LiveMapView from "./LiveMapView";
@@ -28,7 +28,8 @@ const TARIFF_LABEL = {
  * @param {Date} props.scheduledTime
  * @param {Array} props.fareRules - driver's fare_rules rows
  * @param {number} props.preBookingFee - driver's pre_booking_fee
- * @param {function} props.onConfirm - called with the final fare breakdown when the driver taps confirm
+ * @param {number} props.payLaterDepositAmount - driver's minimum pay-later deposit
+ * @param {function} props.onConfirm - called with the final fare breakdown + payment choice when the driver taps confirm
  * @param {function} props.onBack
  */
 export default function FareEstimateScreen({
@@ -38,6 +39,7 @@ export default function FareEstimateScreen({
   scheduledTime,
   fareRules,
   preBookingFee,
+  payLaterDepositAmount,
   onConfirm,
   onBack,
 }) {
@@ -47,6 +49,9 @@ export default function FareEstimateScreen({
   const [fare, setFare] = useState(null);
   const [tariffPeriod, setTariffPeriod] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  // "now": full fare charged upfront. "later": only the deposit is
+  // charged now; the rest is settled with the driver in the taxi.
+  const [paymentTiming, setPaymentTiming] = useState("now");
 
   useEffect(() => {
     let cancelled = false;
@@ -184,15 +189,70 @@ export default function FareEstimateScreen({
             </div>
           </div>
 
+          {/* Pay now vs pay later */}
+          <div
+            className="mb-4 rounded-xl p-4"
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+          >
+            <div className="mb-3 text-xs font-medium text-[#5F5E5A]">How do you want to pay?</div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPaymentTiming("now")}
+                className="flex flex-col items-start gap-1.5 rounded-lg p-3 text-left transition-all"
+                style={{
+                  background: paymentTiming === "now" ? "#EAF1FB" : "#FFFFFF",
+                  border: paymentTiming === "now" ? "1.5px solid #185FA5" : "1px solid #ECE9E0",
+                }}
+              >
+                <CreditCard size={16} color={paymentTiming === "now" ? "#185FA5" : "#5F5E5A"} />
+                <span className="text-xs font-semibold text-[#2C2C2A]">Pay now</span>
+                <span className="text-[11px] text-[#5F5E5A]">Full fare charged by card, right now</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentTiming("later")}
+                className="flex flex-col items-start gap-1.5 rounded-lg p-3 text-left transition-all"
+                style={{
+                  background: paymentTiming === "later" ? "#EAF1FB" : "#FFFFFF",
+                  border: paymentTiming === "later" ? "1.5px solid #185FA5" : "1px solid #ECE9E0",
+                }}
+              >
+                <Banknote size={16} color={paymentTiming === "later" ? "#185FA5" : "#5F5E5A"} />
+                <span className="text-xs font-semibold text-[#2C2C2A]">Pay in the taxi</span>
+                <span className="text-[11px] text-[#5F5E5A]">Cash or card after the ride</span>
+              </button>
+            </div>
+
+            {paymentTiming === "later" && (
+              <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "#FAEEDA", color: "#633806" }}>
+                A €{payLaterDepositAmount.toFixed(2)} deposit is charged now to secure your booking. It's
+                subtracted from the fare — you'll owe €{Math.max(fare.total - payLaterDepositAmount, 0).toFixed(2)} more,
+                payable to the driver by cash or card once the trip is complete.
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={() => onConfirm({ route, fare, tariffPeriod })}
+            onClick={() =>
+              onConfirm({
+                route,
+                fare,
+                tariffPeriod,
+                paymentTiming,
+                depositAmount: paymentTiming === "later" ? payLaterDepositAmount : 0,
+              })
+            }
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
             style={{
               background: "linear-gradient(135deg, #378ADD, #0C447C)",
               boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
             }}
           >
-            Confirm & pay €{fare.total.toFixed(2)} <ArrowRight size={15} />
+            {paymentTiming === "now"
+              ? `Confirm & pay €${fare.total.toFixed(2)}`
+              : `Confirm & pay deposit €${payLaterDepositAmount.toFixed(2)}`}
+            <ArrowRight size={15} />
           </button>
 
           <div className="mt-3 text-center text-[11px] text-[#8C8977]">

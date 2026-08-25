@@ -53,12 +53,18 @@ export default function App() {
   const [vehicle, setVehicle] = useState(null);
   const [fareRules, setFareRules] = useState([]);
   const [driverDataError, setDriverDataError] = useState("");
+  const [payLaterDepositAmount, setPayLaterDepositAmount] = useState(5.0);
+  // Live availability — a driver with an active trip is hidden from new
+  // bookings. This is a UX convenience (skip the wasted trip through the
+  // form); create-booking re-checks this server-side regardless, since
+  // this read can go stale between page-load and submit.
+  const [isDriverAvailable, setIsDriverAvailable] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDriverData() {
-      const [vehicleRes, fareRulesRes] = await Promise.all([
+      const [vehicleRes, fareRulesRes, profileRes] = await Promise.all([
         supabase
           .from("public_vehicle_profiles")
           .select("make, model, color, seats")
@@ -69,12 +75,21 @@ export default function App() {
           .select("id, name, tariff_period, base_rate, per_km_rate, per_minute_rate, minimum_fare, tariff_a_cap, tariff_b_per_km_rate, tariff_b_per_minute_rate, discount_percent, is_active")
           .eq("driver_id", DEMO_DRIVER_ID)
           .eq("is_active", true),
+        supabase
+          .from("public_driver_profiles")
+          .select("is_available, pay_later_deposit_amount")
+          .eq("id", DEMO_DRIVER_ID)
+          .maybeSingle(),
       ]);
 
       if (cancelled) return;
 
       if (!vehicleRes.error) setVehicle(vehicleRes.data);
       if (!fareRulesRes.error) setFareRules(fareRulesRes.data ?? []);
+      if (!profileRes.error && profileRes.data) {
+        setIsDriverAvailable(profileRes.data.is_available);
+        setPayLaterDepositAmount(Number(profileRes.data.pay_later_deposit_amount ?? 5));
+      }
 
       if (vehicleRes.error || fareRulesRes.error || !vehicleRes.data || (fareRulesRes.data ?? []).length === 0) {
         // Surfaced in the UI rather than silently falling back to fake
@@ -92,11 +107,12 @@ export default function App() {
 
     loadDriverData();
 
-    // Live updates: if the driver changes their vehicle or fare rules
-    // (incl. discount) in the dashboard, passengers already on this page
-    // see it immediately — no refresh needed. Re-fetches both together
-    // on any change rather than trying to patch individual fields, since
-    // that's simpler and this isn't a high-frequency table.
+    // Live updates: if the driver changes their vehicle, fare rules
+    // (incl. discount), or goes busy/free with a new booking, passengers
+    // already on this page see it immediately — no refresh needed.
+    // Re-fetches everything together on any change rather than trying to
+    // patch individual fields, since that's simpler and none of these
+    // tables change at high frequency.
     const channel = supabase
       .channel(`passenger-driver-data-${DEMO_DRIVER_ID}`)
       .on(
@@ -107,6 +123,11 @@ export default function App() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "fare_rules", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
+        () => loadDriverData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `driver_id=eq.${DEMO_DRIVER_ID}` },
         () => loadDriverData()
       )
       .subscribe();
@@ -131,7 +152,7 @@ export default function App() {
     setMenuOpen(false);
   }
 
-  async function handleConfirmFare() {
+  async function handleConfirmFare({ paymentTiming } = {}) {
     setBookingError("");
     setCreatingBooking(true);
 
@@ -142,6 +163,7 @@ export default function App() {
       pickup: DEMO_PICKUP,
       dropoff: DEMO_DROPOFF,
       scheduledTime: new Date(),
+      paymentTiming: paymentTiming || "now",
       accessToken: null, // null = guest booking; pass a real session token for signed-in customers
     });
 
@@ -214,6 +236,12 @@ export default function App() {
           </div>
         )}
 
+        {!isDriverAvailable && !driverDataError && screen === "booking" && (
+          <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FAEEDA", color: "#633806" }}>
+            <AlertCircle size={16} /> This driver is currently on a trip. You can still book — they'll pick you up once free — or check back shortly.
+          </div>
+        )}
+
         {screen === "booking" && (
           <PassengerBooking
             onSubmit={handleBookingFormSubmit}
@@ -230,6 +258,7 @@ export default function App() {
             scheduledTime={formSelection?.scheduledTime ?? new Date()}
             fareRules={fareRules}
             preBookingFee={3.0}
+            payLaterDepositAmount={payLaterDepositAmount}
             onConfirm={handleConfirmFare}
             onBack={() => setScreen("booking")}
           />
@@ -251,7 +280,9 @@ export default function App() {
           <PaymentScreen
             stripePublishableKey={import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY}
             clientSecret={bookingResult.clientSecret}
-            amount={bookingResult.fare.total}
+            amount={bookingResult.paymentTiming === "later" ? bookingResult.depositAmount : bookingResult.fare.total}
+            paymentTiming={bookingResult.paymentTiming}
+            balanceDue={bookingResult.balanceDue}
             onSuccess={() => setScreen("confirmed")}
           />
         )}
@@ -267,7 +298,8 @@ export default function App() {
             pickup={DEMO_PICKUP}
             dropoff={DEMO_DROPOFF}
             scheduledTime={new Date()}
-            totalPaid={bookingResult?.fare?.total ?? 0}
+            totalPaid={bookingResult?.paymentTiming === "later" ? bookingResult?.depositAmount ?? 0 : bookingResult?.fare?.total ?? 0}
+            balanceDue={bookingResult?.paymentTiming === "later" ? bookingResult?.balanceDue : null}
             onViewBooking={() => setScreen("status")}
           />
         )}

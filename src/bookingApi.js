@@ -17,10 +17,11 @@
  * @param {{address:string, lat:number, lng:number}} params.pickup
  * @param {{address:string, lat:number, lng:number}} params.dropoff
  * @param {Date} params.scheduledTime
+ * @param {"now"|"later"} params.paymentTiming
  * @param {string|null} params.accessToken - the signed-in user's Supabase session token, if any; omit for guest bookings
- * @returns {Promise<{bookingId, accessToken, clientSecret, fare, distanceKm, durationMinutes, tariffPeriod} | {error: string}>}
+ * @returns {Promise<{bookingId, accessToken, clientSecret, fare, distanceKm, durationMinutes, tariffPeriod, paymentTiming, depositAmount, balanceDue} | {error: string}>}
  */
-export async function createBooking({ driverId, passengerName, passengerPhone, pickup, dropoff, scheduledTime, accessToken }) {
+export async function createBooking({ driverId, passengerName, passengerPhone, pickup, dropoff, scheduledTime, paymentTiming, accessToken }) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -45,6 +46,7 @@ export async function createBooking({ driverId, passengerName, passengerPhone, p
       dropoff_lat: dropoff.lat,
       dropoff_lng: dropoff.lng,
       scheduled_time: scheduledTime.toISOString(),
+      payment_timing: paymentTiming || "now",
     }),
   });
 

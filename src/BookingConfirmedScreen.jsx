@@ -17,9 +17,10 @@ function useGoogleFont() {
  * @param {{address:string}} props.dropoff
  * @param {Date} props.scheduledTime
  * @param {number} props.totalPaid
+ * @param {number|null} [props.balanceDue] - remaining amount owed to the driver directly (pay-later bookings only)
  * @param {function} props.onViewBooking - go to the live tracking screen
  */
-export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime, totalPaid, onViewBooking }) {
+export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime, totalPaid, balanceDue, onViewBooking }) {
   useGoogleFont();
 
   const dateLabel = scheduledTime.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -66,9 +67,15 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
           <div className="flex items-center gap-1.5"><Clock size={12} /> {timeLabel}</div>
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-[#ECE9E0] pt-3">
-          <span className="text-xs text-[#5F5E5A]">Total paid</span>
+          <span className="text-xs text-[#5F5E5A]">{balanceDue != null ? "Deposit paid" : "Total paid"}</span>
           <span className="text-base font-semibold text-[#2C2C2A]">€{totalPaid.toFixed(2)}</span>
         </div>
+        {balanceDue != null && (
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-xs text-[#5F5E5A]">Balance due (cash or card, after the ride)</span>
+            <span className="text-sm font-medium text-[#633806]">€{balanceDue.toFixed(2)}</span>
+          </div>
+        )}
       </div>
 
       <button

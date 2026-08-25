@@ -29,7 +29,7 @@ function useGoogleFont() {
   }, []);
 }
 
-function PaymentForm({ amount, onSuccess }) {
+function PaymentForm({ amount, paymentTiming, balanceDue, onSuccess }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +62,13 @@ function PaymentForm({ amount, onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit}>
+      {paymentTiming === "later" && (
+        <div className="mb-4 rounded-lg p-3 text-xs leading-relaxed" style={{ background: "#FAEEDA", color: "#633806" }}>
+          This is your <strong>€{amount.toFixed(2)} booking deposit</strong>, not the full fare. You'll pay the
+          remaining €{(balanceDue ?? 0).toFixed(2)} directly to the driver (cash or card) once the trip is complete.
+        </div>
+      )}
+
       <div
         className="rounded-xl p-4"
         style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
@@ -84,7 +91,11 @@ function PaymentForm({ amount, onSuccess }) {
           boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
         }}
       >
-        {submitting ? "Processing…" : `Pay €${amount.toFixed(2)} & confirm booking`}
+        {submitting
+          ? "Processing…"
+          : paymentTiming === "later"
+          ? `Pay €${amount.toFixed(2)} deposit & confirm booking`
+          : `Pay €${amount.toFixed(2)} & confirm booking`}
         {!submitting && <ArrowRight size={15} />}
       </button>
 
@@ -99,11 +110,13 @@ function PaymentForm({ amount, onSuccess }) {
 /**
  * @param {object} props
  * @param {string} props.stripePublishableKey
- * @param {string} props.clientSecret - from the (not-yet-built) booking Edge Function
- * @param {number} props.amount - the fare total in euros, for display only
+ * @param {string} props.clientSecret - from the create-booking Edge Function
+ * @param {number} props.amount - what's being charged right now, in euros (full fare, or just the deposit for pay-later)
+ * @param {"now"|"later"} [props.paymentTiming]
+ * @param {number|null} [props.balanceDue] - remaining amount owed to the driver directly, when paymentTiming is "later"
  * @param {function} props.onSuccess - called with the Stripe PaymentIntent once payment succeeds
  */
-export default function PaymentScreen({ stripePublishableKey, clientSecret, amount, onSuccess }) {
+export default function PaymentScreen({ stripePublishableKey, clientSecret, amount, paymentTiming, balanceDue, onSuccess }) {
   useGoogleFont();
 
   if (!stripePublishableKey || !clientSecret) {
@@ -135,7 +148,7 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, amou
     <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 500 }}>
       <div className="mb-5 text-sm font-semibold text-[#2C2C2A]">Payment</div>
       <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
-        <PaymentForm amount={amount} onSuccess={onSuccess} />
+        <PaymentForm amount={amount} paymentTiming={paymentTiming} balanceDue={balanceDue} onSuccess={onSuccess} />
       </Elements>
     </div>
   );
