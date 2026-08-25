@@ -126,11 +126,18 @@ Deno.serve(async (req) => {
     // public_driver_profiles.is_available before showing the booking
     // form, but that read could be stale by the time they submit, so it
     // must be re-checked here as the actual gate.
+    //
+    // busy_expires_at is the auto-expiry safety net: a trip that's run
+    // far past its estimated duration (scheduled_time + estimate + 90min
+    // buffer) no longer blocks new bookings even if the driver forgot to
+    // mark it complete. Mirrors public_driver_profiles.is_available —
+    // keep both in sync if this logic changes.
     const { count: activeBookingCount, error: activeCountError } = await supabase
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .eq("driver_id", body.driver_id)
-      .in("status", ACTIVE_BOOKING_STATUSES);
+      .in("status", ACTIVE_BOOKING_STATUSES)
+      .or(`busy_expires_at.is.null,busy_expires_at.gt.${new Date().toISOString()}`);
 
     if (activeCountError) {
       return jsonError(`Couldn't check driver availability: ${activeCountError.message}`, 500);
@@ -276,6 +283,11 @@ Deno.serve(async (req) => {
         dropoff_lng: body.dropoff_lng,
         scheduled_time: body.scheduled_time,
         distance_km: distanceKm,
+        // Feeds busy_expires_at (a database trigger — see
+        // set_booking_busy_expires_at) which auto-clears this booking's
+        // hold on driver availability if the trip runs far past its
+        // estimate and the driver never marks it complete.
+        estimated_duration_minutes: durationMinutes,
         estimated_fare: fare.total,
         // Not yet visible to the driver and doesn't lock availability —
         // becomes "pending" only once confirm-booking-payment verifies
