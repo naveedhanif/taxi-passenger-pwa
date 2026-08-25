@@ -57,10 +57,16 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  // Tracks whether PaymentElement has actually finished mounting its
+  // iframe — stripe/elements existing is NOT the same thing. Calling
+  // confirmPayment() before this fires is exactly what caused
+  // "IntegrationError: elements should have a mounted Payment Element"
+  // even though stripe and elements were both non-null.
+  const [elementReady, setElementReady] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || !elementReady) return;
 
     setSubmitting(true);
     setErrorMessage("");
@@ -130,6 +136,7 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
         style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
       >
         <PaymentElement
+          onReady={() => setElementReady(true)}
           options={{
             // "auto" (the default) already shows Apple Pay / Google Pay
             // when the browser/device supports it AND the domain is
@@ -150,7 +157,7 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
 
       <button
         type="submit"
-        disabled={!stripe || submitting}
+        disabled={!stripe || !elementReady || submitting}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
         style={{
           background: "linear-gradient(135deg, #378ADD, #0C447C)",
@@ -159,10 +166,12 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
       >
         {submitting
           ? "Processing…"
+          : !elementReady
+          ? "Loading payment form…"
           : paymentTiming === "later"
           ? `Pay €${amount.toFixed(2)} deposit & confirm booking`
           : `Pay €${amount.toFixed(2)} & confirm booking`}
-        {!submitting && <ArrowRight size={15} />}
+        {!submitting && elementReady && <ArrowRight size={15} />}
       </button>
 
       <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-[#8C8977]">
