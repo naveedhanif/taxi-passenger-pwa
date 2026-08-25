@@ -63,6 +63,13 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
   // "IntegrationError: elements should have a mounted Payment Element"
   // even though stripe and elements were both non-null.
   const [elementReady, setElementReady] = useState(false);
+  // If the element fails to load entirely (bad key, network block, key
+  // mode mismatch between publishable/secret key, etc.) neither onReady
+  // NOR any console error fires by default — the form just silently
+  // stays blank forever. onLoadError is the one callback Stripe
+  // actually provides for this exact case; without wiring it up, this
+  // failure mode is completely invisible to both user and developer.
+  const [loadError, setLoadError] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -137,6 +144,15 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
       >
         <PaymentElement
           onReady={() => setElementReady(true)}
+          onLoadError={(event) => {
+            // This is the one signal Stripe gives us when the element
+            // genuinely fails to mount — a bad/mismatched key, a
+            // network block to js.stripe.com, or an invalid
+            // clientSecret are the usual causes. Surfaced directly in
+            // the UI (see the diagnostic panel below) so this failure
+            // mode is no longer invisible.
+            setLoadError(event?.error?.message || "Payment form failed to load (unknown reason)");
+          }}
           options={{
             // "auto" (the default) already shows Apple Pay / Google Pay
             // when the browser/device supports it AND the domain is
@@ -148,6 +164,23 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
           }}
         />
       </div>
+
+      {/* TEMPORARY DIAGNOSTIC — remove once the blank-payment-form bug
+          is confirmed fixed. Surfaces exactly what state Stripe's SDK
+          is in without needing DevTools, since the failure mode being
+          debugged produces zero console errors by default. */}
+      <div className="mt-3 rounded-lg p-3 text-[10px] font-mono leading-relaxed" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+        <div>stripe loaded: {stripe ? "yes" : "no"}</div>
+        <div>elements loaded: {elements ? "yes" : "no"}</div>
+        <div>element ready: {elementReady ? "yes" : "no"}</div>
+        <div>load error: {loadError || "none"}</div>
+      </div>
+
+      {loadError && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+          <AlertCircle size={14} /> Payment form couldn't load: {loadError}
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mt-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
@@ -234,6 +267,19 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, book
   return (
     <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 500 }}>
       <div className="mb-5 text-sm font-semibold text-[#2C2C2A]">Payment</div>
+
+      {/* TEMPORARY DIAGNOSTIC — remove once the blank-payment-form bug
+          is confirmed fixed. Shows just enough of each value (never the
+          full clientSecret or key) to confirm publishable-key mode and
+          that a real clientSecret was actually received, without
+          exposing anything sensitive on screen. */}
+      <div className="mb-3 rounded-lg p-3 text-[10px] font-mono leading-relaxed" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+        <div>publishable key prefix: {stripePublishableKey.slice(0, 12)}...</div>
+        <div>publishable key mode: {stripePublishableKey.startsWith("pk_live_") ? "LIVE" : stripePublishableKey.startsWith("pk_test_") ? "TEST" : "UNKNOWN"}</div>
+        <div>clientSecret present: {clientSecret ? "yes" : "no"}</div>
+        <div>clientSecret prefix: {clientSecret ? clientSecret.slice(0, 20) + "..." : "n/a"}</div>
+      </div>
+
       <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
         <PaymentForm amount={amount} paymentTiming={paymentTiming} balanceDue={balanceDue} bookingId={bookingId} onSuccess={onSuccess} />
       </Elements>
