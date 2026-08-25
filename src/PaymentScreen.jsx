@@ -4,19 +4,16 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 import { ShieldCheck, ArrowRight, AlertCircle } from "lucide-react";
 
 /**
- * IMPORTANT CORRECTION from an earlier design pass: this uses Stripe's
- * real Elements/PaymentElement — never raw card number/expiry/CVC input
- * fields owned by our own app. Handling raw card numbers directly is a
- * PCI-DSS compliance problem; Stripe's Elements is a secure iframe THEY
- * control specifically so app code never touches raw card data.
+ * Uses Stripe's real Elements/PaymentElement — never raw card number/
+ * expiry/CVC input fields owned by our own app. Handling raw card
+ * numbers directly is a PCI-DSS compliance problem; Stripe's Elements is
+ * a secure iframe THEY control specifically so app code never touches
+ * raw card data.
  *
- * clientSecret must come from a backend call (a Supabase Edge Function)
- * that creates a Stripe PaymentIntent with:
- *   - amount: eurosToStripeCents(fare.total)
- *   - application_fee_amount: <platform's cut, in cents>
- *   - transfer_data: { destination: driver.stripe_connect_account_id }
- * That Edge Function doesn't exist yet — this screen expects clientSecret
- * as a prop once it does.
+ * clientSecret comes from the create-booking Edge Function, which
+ * creates a Stripe PaymentIntent with amount/application_fee_amount/
+ * transfer_data already set correctly — see
+ * supabase/functions/create-booking/index.ts.
  */
 
 function useGoogleFont() {
@@ -129,14 +126,25 @@ function PaymentForm({ amount, paymentTiming, balanceDue, onSuccess }) {
 export default function PaymentScreen({ stripePublishableKey, clientSecret, amount, paymentTiming, balanceDue, onSuccess }) {
   useGoogleFont();
 
-  if (!stripePublishableKey || !clientSecret) {
+  if (!stripePublishableKey) {
     return (
       <div
         className="mx-auto w-full max-w-[400px] p-5 text-center text-sm text-[#8C8977]"
         style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 300 }}
       >
-        Payment unavailable — booking must be created first (this needs the
-        booking Edge Function that doesn't exist yet).
+        Payment unavailable — VITE_STRIPE_PUBLISHABLE_KEY isn't set for this deployment. Add it in your
+        hosting provider's environment variables (not just your local .env file) and redeploy.
+      </div>
+    );
+  }
+
+  if (!clientSecret) {
+    return (
+      <div
+        className="mx-auto w-full max-w-[400px] p-5 text-center text-sm text-[#8C8977]"
+        style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 300 }}
+      >
+        Payment unavailable — no booking was created yet. Go back and confirm your fare estimate first.
       </div>
     );
   }
