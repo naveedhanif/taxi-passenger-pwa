@@ -109,15 +109,24 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
         });
         const data = await res.json();
         if (!res.ok || !data.confirmed) {
+          // Surface the real reason instead of a generic message — this
+          // was previously discarded, which made "payment succeeded but
+          // booking wasn't confirmed" failures completely undiagnosable
+          // from the outside. See confirm-booking-payment/index.ts for
+          // what these mean: a 4xx/5xx means the function itself
+          // errored; confirmed:false with a stripeStatus means Stripe's
+          // OWN records say the PaymentIntent didn't reach "succeeded"
+          // (e.g. still "requires_action" for a card needing 3D Secure).
+          const detail = data?.error || (data?.stripeStatus ? `Stripe status: ${data.stripeStatus}` : `HTTP ${res.status}`);
           setErrorMessage(
-            "Your payment went through, but we couldn't confirm your booking — please contact support with your booking reference."
+            `Your payment may have gone through, but we couldn't confirm your booking (${detail}). Please contact support with your booking reference: ${bookingId}`
           );
           setSubmitting(false);
           return;
         }
-      } catch {
+      } catch (err) {
         setErrorMessage(
-          "Your payment went through, but we couldn't confirm your booking — please contact support with your booking reference."
+          `Your payment may have gone through, but we couldn't reach our server to confirm your booking (${err instanceof Error ? err.message : "network error"}). Please contact support with your booking reference: ${bookingId}`
         );
         setSubmitting(false);
         return;
