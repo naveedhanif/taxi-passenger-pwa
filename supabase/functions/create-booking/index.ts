@@ -121,29 +121,28 @@ Deno.serve(async (req) => {
       return jsonError("This driver hasn't finished payment setup yet", 400);
     }
 
-    // ---- Availability check: reject if the driver has an active trip ----
+    // ---- Availability check: reject only if the driver has a CONFLICTING trip ----
     // Server-side, not just a UI hide — the passenger app checks this via
     // public_driver_profiles.is_available before showing the booking
     // form, but that read could be stale by the time they submit, so it
     // must be re-checked here as the actual gate.
     //
-    // busy_expires_at is the auto-expiry safety net: a trip that's run
-    // far past its estimated duration (scheduled_time + estimate + 90min
-    // buffer) no longer blocks new bookings even if the driver forgot to
-    // mark it complete. Mirrors public_driver_profiles.is_available —
-    // keep both in sync if this logic changes.
-    const { count: activeBookingCount, error: activeCountError } = await supabase
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("driver_id", body.driver_id)
-      .in("status", ACTIVE_BOOKING_STATUSES)
-      .or(`busy_expires_at.is.null,busy_expires_at.gt.${new Date().toISOString()}`);
+    // Uses is_driver_available_at(), which checks for real TIME OVERLAP
+    // against the requested scheduled_time — not just "does any active
+    // booking exist". A booking two days from now must not block a
+    // passenger trying to book for right now; only a booking whose
+    // estimated window (scheduled_time through busy_expires_at) actually
+    // contains the requested time counts as a conflict.
+    const { data: availabilityCheck, error: availabilityError } = await supabase.rpc(
+      "is_driver_available_at",
+      { p_driver_id: body.driver_id, p_requested_time: body.scheduled_time }
+    );
 
-    if (activeCountError) {
-      return jsonError(`Couldn't check driver availability: ${activeCountError.message}`, 500);
+    if (availabilityError) {
+      return jsonError(`Couldn't check driver availability: ${availabilityError.message}`, 500);
     }
-    if ((activeBookingCount ?? 0) > 0) {
-      return jsonError("This driver is currently on a trip and isn't available for new bookings right now", 409);
+    if (availabilityCheck === false) {
+      return jsonError("This driver already has a booking around that time — please choose a different time", 409);
     }
 
     // ---- Resolve customer_id if the request is authenticated ----

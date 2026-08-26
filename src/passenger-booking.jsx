@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
+import { supabase } from "./supabaseClient.js";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -80,26 +81,87 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
   );
 }
 
-export default function PassengerBooking({ avgRating = null, reviewCount = 0, onSubmit, mapboxToken, vehicle, businessName, licenceVerified = false }) {
+export default function PassengerBooking({
+  avgRating = null,
+  reviewCount = 0,
+  onSubmit,
+  mapboxToken,
+  vehicle,
+  businessName,
+  licenceVerified = false,
+  draft,
+  onDraftChange,
+  isDriverAvailable = true,
+  driverId,
+}) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
-  const [pickup, setPickup] = useState("");
-  const [dropoff, setDropoff] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [passengerName, setPassengerName] = useState("");
-  const [passengerPhone, setPassengerPhone] = useState("");
-  const [passengerEmail, setPassengerEmail] = useState("");
+
+  // Persisted fields live in the parent's `draft` object (App.jsx) so
+  // they survive navigating away from this screen and back — this
+  // component gets unmounted whenever `screen` changes, which would
+  // otherwise wipe everything typed. Read/write through small helpers
+  // so the rest of this file can still just call setPickup(...) etc.
+  const patchDraft = (patch) => onDraftChange?.((prev) => ({ ...prev, ...patch }));
+  const { passengerName, passengerPhone, passengerEmail, pickup, dropoff, pickupCoords, dropoffCoords, date, time } = draft;
+  const setPassengerName = (v) => patchDraft({ passengerName: v });
+  const setPassengerPhone = (v) => patchDraft({ passengerPhone: v });
+  const setPassengerEmail = (v) => patchDraft({ passengerEmail: v });
+  const setPickup = (v) => patchDraft({ pickup: v });
+  const setDropoff = (v) => patchDraft({ dropoff: v });
+  const setPickupCoords = (v) => patchDraft({ pickupCoords: v });
+  const setDropoffCoords = (v) => patchDraft({ dropoffCoords: v });
+  const setDate = (v) => patchDraft({ date: v });
+  const setTime = (v) => patchDraft({ time: v });
+
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [formError, setFormError] = useState("");
   const [resolving, setResolving] = useState(false);
 
-  // Coordinates resolved via Mapbox Search Box API once the passenger
-  // picks a suggestion. FareEstimateScreen needs {lat, lng, address},
-  // not the raw typed string or an unresolved suggestion.
-  const [pickupCoords, setPickupCoords] = useState(null);
-  const [dropoffCoords, setDropoffCoords] = useState(null);
+  // Real-time, per-selected-time availability check — distinct from
+  // isDriverAvailable (which only reflects "right now"). A driver can
+  // have a future booking that only blocks THAT specific overlapping
+  // window; this checks the exact date/time the passenger has picked
+  // against is_driver_available_at() so they find out immediately
+  // rather than after filling in the whole form.
+  const [slotAvailable, setSlotAvailable] = useState(true);
+  const [checkingSlot, setCheckingSlot] = useState(false);
+
+  useEffect(() => {
+    if (!driverId || !date || !time) {
+      setSlotAvailable(true);
+      return;
+    }
+    let cancelled = false;
+    const requestedTime = new Date(`${date}T${time}`);
+    if (isNaN(requestedTime.getTime())) {
+      setSlotAvailable(true);
+      return;
+    }
+
+    setCheckingSlot(true);
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("is_driver_available_at", {
+        p_driver_id: driverId,
+        p_requested_time: requestedTime.toISOString(),
+      });
+      if (cancelled) return;
+      setCheckingSlot(false);
+      // On error, don't block the passenger — create-booking re-checks
+      // this server-side regardless, so a failed client-side check here
+      // just means they find out one step later instead of right away.
+      setSlotAvailable(error ? true : data !== false);
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [driverId, date, time]);
+
+  // Transient — suggestion lists and search sessions don't need to
+  // survive a screen change, so these stay as ordinary local state.
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
   // Search Box API session tokens — one per field, persisted across
@@ -170,6 +232,10 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
   }
 
   async function handleSubmit() {
+    if (!isDriverAvailable) {
+      setFormError("This driver isn't available right now — check back shortly.");
+      return;
+    }
     if (!passengerName.trim() || !passengerPhone.trim()) {
       setFormError("Enter your name and phone number");
       return;
@@ -180,6 +246,10 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
     }
     if (!date || !time) {
       setFormError("Choose a date and time");
+      return;
+    }
+    if (!slotAvailable) {
+      setFormError("This driver already has a booking around that time — please choose a different time");
       return;
     }
 
@@ -459,13 +529,23 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
             <EmbossField icon={Calendar} label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             <EmbossField icon={Clock} label="Time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
+          {checkingSlot && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#8C8977]">
+              <Loader2 size={11} className="animate-spin" /> Checking availability for that time…
+            </div>
+          )}
+          {!checkingSlot && !slotAvailable && date && time && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "#A32D2D" }}>
+              <AlertCircle size={11} /> This driver already has a booking around that time — try a different time.
+            </div>
+          )}
         </div>
 
         {formError && <div className="mt-3 text-[11px] text-[#A32D2D]">{formError}</div>}
 
         <button
           type="button"
-          disabled={resolving}
+          disabled={resolving || !isDriverAvailable || (date && time && !slotAvailable)}
           onClick={handleSubmit}
           onMouseDown={() => setPressed(true)}
           onMouseUp={() => setPressed(false)}
@@ -484,6 +564,10 @@ export default function PassengerBooking({ avgRating = null, reviewCount = 0, on
             <>
               <Loader2 size={15} className="animate-spin" /> Finding route…
             </>
+          ) : !isDriverAvailable ? (
+            "Driver unavailable right now"
+          ) : date && time && !slotAvailable ? (
+            "Driver busy at that time"
           ) : (
             <>
               Get fare estimate <ArrowRight size={15} />

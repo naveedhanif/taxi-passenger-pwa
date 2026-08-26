@@ -48,6 +48,24 @@ export default function App() {
   // the fare screen falls back to demo pickup/dropoff below.
   const [formSelection, setFormSelection] = useState(null);
 
+  // Lifted booking-form draft — owned here (App stays mounted across
+  // screen changes) rather than as local state inside PassengerBooking
+  // (which unmounts whenever `screen` changes away from "booking",
+  // wiping anything typed). Passed down as controlled props so
+  // navigating away (e.g. back from the fare/payment screen) and
+  // returning preserves everything the passenger already typed.
+  const [bookingDraft, setBookingDraft] = useState({
+    passengerName: "",
+    passengerPhone: "",
+    passengerEmail: "",
+    pickup: "",
+    dropoff: "",
+    pickupCoords: null,
+    dropoffCoords: null,
+    date: "",
+    time: "",
+  });
+
   // Real driver data — vehicle shown on the booking card, fare rules
   // used for the estimate. Both come from Supabase, not hardcoded demo
   // values, so the passenger actually sees this driver's real setup.
@@ -186,10 +204,36 @@ export default function App() {
     };
   }, [driverId]);
 
-  function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, date, time }) {
+  async function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, date, time }) {
     // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
     // booking form resolves them via Mapbox before calling onSubmit.
-    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, scheduledTime: new Date(`${date}T${time}`) });
+    const scheduledTime = new Date(`${date}T${time}`);
+
+    // Re-check availability for the EXACT requested time before moving
+    // on — driverId's "is_available" from the loaded profile only
+    // reflects "available right now", which isn't accurate once the
+    // passenger has picked a specific future time. This is a real
+    // time-overlap check (is_driver_available_at), same one
+    // create-booking uses as the final gate — this earlier check just
+    // gives the passenger a faster, friendlier "pick a different time"
+    // instead of discovering the conflict after filling in payment.
+    setBookingError("");
+    const { data: isAvailableAtTime, error: availabilityError } = await supabase.rpc(
+      "is_driver_available_at",
+      { p_driver_id: driverId, p_requested_time: scheduledTime.toISOString() }
+    );
+
+    if (availabilityError) {
+      // Fail open here — don't block the passenger over a transient
+      // network hiccup on a courtesy pre-check. create-booking still
+      // enforces the real gate server-side regardless.
+      console.error("Availability pre-check failed:", availabilityError);
+    } else if (isAvailableAtTime === false) {
+      setBookingError("This driver already has a booking around that time — please choose a different time.");
+      return;
+    }
+
+    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, scheduledTime });
     setScreen("fare");
   }
 
@@ -322,7 +366,8 @@ export default function App() {
 
         {!isDriverAvailable && !driverDataError && screen === "booking" && (
           <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FAEEDA", color: "#633806" }}>
-            <AlertCircle size={16} /> This driver is currently on a trip. You can still book — they'll pick you up once free — or check back shortly.
+            <AlertCircle size={16} /> This driver already has a booking in progress right now — check back
+            shortly, or pick a later date/time below.
           </div>
         )}
 
@@ -335,6 +380,10 @@ export default function App() {
             avgRating={avgRating}
             reviewCount={reviewCount}
             licenceVerified={licenceVerified}
+            draft={bookingDraft}
+            onDraftChange={setBookingDraft}
+            isDriverAvailable={isDriverAvailable}
+            driverId={driverId}
           />
         )}
 
