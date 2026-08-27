@@ -198,6 +198,14 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
       window.alert(result.error);
       return;
     }
+    if (result.refundError) {
+      // The cancellation itself succeeded but the refund didn't go
+      // through automatically — worth surfacing loudly rather than
+      // silently, since real money is stuck.
+      window.alert(
+        "Your booking is cancelled, but the automatic refund failed. Please contact your driver or the platform for a manual refund."
+      );
+    }
     load();
   }
 
@@ -280,13 +288,21 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           )}
           <div>
             <div className="text-base font-semibold text-[#2C2C2A]">{STAGE_LABEL[status] || status}</div>
-            {driver.businessName && !isCanceled && (
-              <div className="text-xs text-[#5F5E5A]">
-                {status === "en_route" ? `${driver.businessName} is heading to your pickup location` :
-                 status === "arrived" ? "Your driver is waiting outside" :
-                 status === "completed" ? `Thanks for riding with ${driver.businessName}` :
-                 `${driver.businessName} will be on their way closer to pickup time`}
+            {isCanceled ? (
+              <div className="text-xs" style={{ color: booking.refunded ? "#3B6D11" : "#5F5E5A" }}>
+                {booking.refunded
+                  ? "Your refund is on the way — it can take a few days to appear on your statement."
+                  : "This booking was cancelled."}
               </div>
+            ) : (
+              driver.businessName && (
+                <div className="text-xs text-[#5F5E5A]">
+                  {status === "en_route" ? `${driver.businessName} is heading to your pickup location` :
+                   status === "arrived" ? "Your driver is waiting outside" :
+                   status === "completed" ? `Thanks for riding with ${driver.businessName}` :
+                   `${driver.businessName} will be on their way closer to pickup time`}
+                </div>
+              )
             )}
           </div>
         </div>
@@ -411,7 +427,18 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         >
           Book {driver.businessName || "again"}
         </button>
-      ) : !isCanceled && booking.selfCancelable ? (
+      ) : isCanceled ? (
+        <button
+          onClick={onBookAgain}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
+          style={{
+            background: "linear-gradient(135deg, #378ADD, #0C447C)",
+            boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+          }}
+        >
+          Back to home
+        </button>
+      ) : booking.selfCancelable ? (
         <button
           onClick={handleCancel}
           disabled={canceling}
@@ -424,7 +451,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         >
           <X size={14} /> {canceling ? "Cancelling…" : "Cancel booking"}
         </button>
-      ) : !isCanceled && !isDone && phoneLinks ? (
+      ) : phoneLinks ? (
         <div className="text-center text-xs text-[#8C8977]">
           Your driver is already on the way — contact them directly above to cancel.
         </div>

@@ -9,21 +9,6 @@
  * @param {string|null} [params.customerSessionToken] - the signed-in customer's Supabase session access token; omit for a guest
  */
 export async function getBookingStatus({ bookingId, guestAccessToken, customerSessionToken }) {
-  return callGetBookingStatus({ bookingId, guestAccessToken, customerSessionToken, action: "get" });
-}
-
-/**
- * Cancels a booking that hasn't progressed past "confirmed" yet. See
- * get-booking-status/index.ts's SELF_CANCELABLE_STATUSES for exactly
- * which states allow this — once a driver is en route, the server
- * rejects the cancel and the passenger needs to contact the driver
- * directly instead.
- */
-export async function cancelBooking({ bookingId, guestAccessToken, customerSessionToken }) {
-  return callGetBookingStatus({ bookingId, guestAccessToken, customerSessionToken, action: "cancel" });
-}
-
-async function callGetBookingStatus({ bookingId, guestAccessToken, customerSessionToken, action }) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -34,18 +19,43 @@ async function callGetBookingStatus({ bookingId, guestAccessToken, customerSessi
       Authorization: `Bearer ${customerSessionToken || anonKey}`,
       apikey: anonKey,
     },
-    body: JSON.stringify({
-      booking_id: bookingId,
-      access_token: guestAccessToken || null,
-      action,
-    }),
+    body: JSON.stringify({ booking_id: bookingId, access_token: guestAccessToken || null }),
   });
 
   const data = await response.json();
-
   if (!response.ok) {
     return { error: data.error || "Couldn't load this booking" };
   }
+  return data;
+}
 
+/**
+ * Cancels a booking that hasn't progressed past "confirmed" yet, and
+ * triggers a real Stripe refund (via cancel-booking/index.ts) for
+ * whatever was actually charged — full fare or deposit. This used to
+ * only flip the booking's status with no refund at all; now the server
+ * response includes whether the refund actually succeeded, so the UI
+ * can say so accurately rather than just assuming it worked.
+ *
+ * @returns {Promise<{canceled:true, refunded:boolean, refundError:string|null} | {error:string}>}
+ */
+export async function cancelBooking({ bookingId, guestAccessToken, customerSessionToken }) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/cancel-booking`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${customerSessionToken || anonKey}`,
+      apikey: anonKey,
+    },
+    body: JSON.stringify({ booking_id: bookingId, access_token: guestAccessToken || null }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    return { error: data.error || "Couldn't cancel this booking" };
+  }
   return data;
 }

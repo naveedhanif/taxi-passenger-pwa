@@ -4,6 +4,12 @@
 // replaces the fully-mocked passenger-booking-status.jsx that used
 // hardcoded coordinates, a fake driver name, and a demo stage switcher.
 //
+// This function is READ-ONLY. Cancelling (and the Stripe refund that
+// needs to happen alongside it) lives in cancel-booking/index.ts —
+// keeping that logic in one place since the driver dashboard also
+// needs to trigger the exact same refund handling when a driver
+// cancels, not just a passenger's self-cancel.
+//
 // AUTHORIZATION — mirrors create-booking's guest-vs-customer split:
 //   - Guest: the client proves ownership of the booking by sending back
 //     the `access_token` that create-booking returned when the booking
@@ -30,17 +36,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// A passenger can only self-cancel before the driver is actively
-// committed to the trip. Once en_route/arrived/in_progress, cancelling
-// needs to go through the driver directly (call/WhatsApp) — not exposed
-// here, to avoid a passenger silently cancelling a trip the driver is
-// already mid-way through.
+// Mirrors cancel-booking/index.ts's PASSENGER_SELF_CANCELABLE_STATUSES
+// — used here only to tell the client whether to show a Cancel button
+// at all, not to actually authorize a cancel (that check happens for
+// real, server-side, in cancel-booking).
 const SELF_CANCELABLE_STATUSES = ["pending", "confirmed"];
 
 interface RequestBody {
   booking_id: string;
   access_token?: string | null;
-  action?: "get" | "cancel";
 }
 
 Deno.serve(async (req) => {
@@ -53,17 +57,17 @@ Deno.serve(async (req) => {
     if (!body.booking_id) {
       return jsonError("Missing required field: booking_id", 400);
     }
-    const action = body.action ?? "get";
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(
-        "id, driver_id, customer_id, access_token, passenger_name, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, scheduled_time, status, estimated_fare, final_fare, payment_timing, deposit_amount, balance_due"
+        "id, driver_id, customer_id, access_token, passenger_name, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, scheduled_time, status, estimated_fare, final_fare, payment_timing, deposit_amount, balance_due, payment_status, deposit_payment_status"
       )
       .eq("id", body.booking_id)
       .single();
@@ -99,23 +103,6 @@ Deno.serve(async (req) => {
       return jsonError("Not authorized to view this booking", 403);
     }
 
-    if (action === "cancel") {
-      if (!SELF_CANCELABLE_STATUSES.includes(booking.status)) {
-        return jsonError(
-          "This booking can no longer be self-cancelled — please contact your driver directly.",
-          400
-        );
-      }
-      const { error: cancelError } = await supabase
-        .from("bookings")
-        .update({ status: "canceled" })
-        .eq("id", booking.id);
-      if (cancelError) {
-        return jsonError(`Couldn't cancel booking: ${cancelError.message}`, 500);
-      }
-      booking.status = "canceled";
-    }
-
     // ---- Driver + vehicle (public, safe fields only — same views the
     // booking form uses) ----
     const [driverRes, vehicleRes] = await Promise.all([
@@ -142,6 +129,8 @@ Deno.serve(async (req) => {
       if (trackingRow) position = { lat: trackingRow.lat, lng: trackingRow.lng };
     }
 
+    const relevantPaymentStatus = booking.payment_timing === "later" ? booking.deposit_payment_status : booking.payment_status;
+
     return new Response(
       JSON.stringify({
         booking: {
@@ -157,6 +146,7 @@ Deno.serve(async (req) => {
           depositAmount: booking.deposit_amount,
           balanceDue: booking.balance_due,
           selfCancelable: SELF_CANCELABLE_STATUSES.includes(booking.status),
+          refunded: relevantPaymentStatus === "refunded",
         },
         driver: {
           businessName: driverRes.data?.business_name ?? null,

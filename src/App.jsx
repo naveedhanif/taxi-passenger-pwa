@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Menu, X, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
+import { Menu, X, AlertCircle, Loader2, ArrowLeft, Home as HomeIcon } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
 import FareEstimateScreen from "./FareEstimateScreen.jsx";
@@ -181,6 +181,26 @@ export default function App() {
       sub.subscription.unsubscribe();
     };
   }, [driverId, resolveCustomerForSession]);
+
+  // Auto-fill the booking form with a signed-in customer's real details
+  // — previously every passenger had to retype their name/phone/email
+  // on every single booking even with an account, since the form never
+  // looked at customerSession at all. Only fills in currently-blank
+  // fields, so it never overwrites something already typed (e.g. a
+  // guest who started filling the form, then signed in mid-way).
+  useEffect(() => {
+    const c = customerSession?.customer;
+    if (!c) return;
+    setBookingDraft((prev) => {
+      if (prev.passengerName || prev.passengerPhone || prev.passengerEmail) return prev;
+      return {
+        ...prev,
+        passengerName: c.name || "",
+        passengerPhone: c.phone || "",
+        passengerEmail: c.email || "",
+      };
+    });
+  }, [customerSession]);
 
   // ---- Guest booking persistence ----
   // Without a real router, a page refresh resets `screen` back to
@@ -751,6 +771,21 @@ export default function App() {
           </>
         )}
       </div>
+
+      {/* Persistent way back to the start — this app has no browser-style
+          back button of its own, and specific screens (like a cancelled
+          booking) could otherwise be a dead end with no way out. Only
+          shown when not already on the booking screen. */}
+      {screen !== "booking" && (
+        <button
+          onClick={() => go("booking")}
+          className="fixed bottom-2 left-2 z-50 flex items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-medium opacity-80 hover:opacity-100 transition-opacity"
+          style={{ background: "#2C2C2A", color: "#F0EEE7" }}
+          aria-label="Back to home"
+        >
+          <HomeIcon size={13} /> Home
+        </button>
+      )}
 
       {/* Version badge — small, fixed, out of the way. Exists purely so
           you can glance at the app and confirm which deployed commit
