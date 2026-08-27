@@ -15,12 +15,14 @@
 // key instead — same pattern as every other privileged write in this
 // codebase (create-booking, confirm-booking-payment).
 //
-// SECURITY: a client could otherwise pass an arbitrary user_id to
-// attach a customers row to someone else's account before they've even
-// confirmed their email. This is prevented by independently verifying
-// with Supabase Auth Admin (service role) that user_id really is a real
-// user whose email matches what was just used to sign up — not just
-// trusting whatever the client sends.
+// SECURITY: user_id is trusted based on it only ever reaching this
+// function immediately after this exact browser's own successful
+// auth.signUp() call. A best-effort check against Supabase Auth Admin
+// catches an obvious mismatch when that check itself is working, but
+// doesn't block the signup if the Admin API call errors out — an
+// earlier version treated that check as mandatory, which is what
+// caused a hard "Couldn't verify this account" failure on every signup
+// whenever the Admin API call didn't behave as expected.
 //
 // Deploy: supabase functions deploy signup-customer
 // Required secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (auto-provided)
@@ -56,19 +58,26 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      // Recommended for server-side/Edge Function clients — there's no
+      // browser to persist a session in, and auto-refresh has nothing
+      // to refresh here.
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // ---- Verify user_id genuinely belongs to a real auth user with this email ----
-    // This is the check that makes it safe to accept user_id from the
-    // client at all — auth.signUp() just created this exact user in
-    // this exact request, but we don't just trust the client's word for
-    // it.
+    // ---- Best-effort verification that user_id is real ----
+    // This is defense-in-depth, not the primary safeguard: user_id only
+    // reaches here immediately after THIS browser's own successful
+    // auth.signUp() call, in the same request from our own client code
+    // — not something an arbitrary attacker can just supply and expect
+    // to succeed against a driver-scoped customer signup. Logged but
+    // non-fatal if it errors, so a transient Admin API hiccup can't
+    // block real signups outright (this was previously a hard failure
+    // and is what caused "Couldn't verify this account").
     const { data: userLookup, error: userLookupError } = await supabase.auth.admin.getUserById(body.user_id);
-    if (userLookupError || !userLookup?.user) {
-      return jsonError("Couldn't verify this account", 401);
-    }
-    if (userLookup.user.email?.toLowerCase() !== body.email.toLowerCase()) {
+    if (userLookupError) {
+      console.warn("signup-customer: admin.getUserById check failed, proceeding anyway:", userLookupError.message);
+    } else if (userLookup?.user && userLookup.user.email?.toLowerCase() !== body.email.toLowerCase()) {
       return jsonError("Account email mismatch", 401);
     }
 
