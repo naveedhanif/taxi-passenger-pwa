@@ -49,12 +49,17 @@ Deno.serve(async (req) => {
 
   try {
     const body: RequestBody = await req.json();
-    const required = ["user_id", "email", "name", "driver_id"];
+    const required = ["user_id", "email", "driver_id"];
     for (const field of required) {
       if (!body[field as keyof RequestBody]) {
         return jsonError(`Missing required field: ${field}`, 400);
       }
     }
+    // name is technically optional here specifically so the self-heal
+    // path (customerAuth.js's ensureCustomerRecord, called after a
+    // sign-in where we only have email/password, not a name) can still
+    // create a usable row — a real signup always sends a real name.
+    const name = body.name || body.email.split("@")[0];
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -102,7 +107,7 @@ Deno.serve(async (req) => {
       .insert({
         user_id: body.user_id,
         driver_id: body.driver_id,
-        name: body.name,
+        name,
         phone: body.phone || null,
         email: body.email,
       })

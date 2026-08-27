@@ -56,6 +56,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
       setSubmitting(false);
       if (result.error) {
         setErrorMessage(result.error);
+        if (result.alreadyRegistered) setMode("signin");
         return;
       }
       if (result.needsEmailConfirmation) {

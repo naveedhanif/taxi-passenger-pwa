@@ -25,33 +25,23 @@ export async function signUpCustomer({ email, password, name, phone, driverId })
     return { customerId: null, error: "Check your email to confirm your account before signing in." };
   }
 
-  // The customers row is created server-side (signup-customer Edge
-  // Function) rather than via a direct client insert here — that used
-  // to fail with "new row violates row-level security policy for table
-  // customers", either because email confirmation is required (so
-  // there's no active session yet to satisfy an auth.uid()-based
-  // policy) or because no INSERT policy permits it at all. The Edge
-  // Function bypasses RLS with the service role key after
-  // independently verifying the user_id is real, so it works
-  // regardless of which case applies.
-  const signupResult = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-customer`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        user_id: authData.user.id,
-        email,
-        name,
-        phone: phone || null,
-        driver_id: driverId,
-      }),
-    }
-  ).then((r) => r.json());
+  // Supabase Auth deliberately does NOT tell the client "this email is
+  // already registered" — for privacy, so a stranger can't probe which
+  // emails have accounts. Instead it returns a 200 with a user object
+  // whose `identities` array is empty, meaning no new identity was
+  // actually created. Treating that as a normal fresh signup (as this
+  // used to) meant passing an id to signup-customer that doesn't
+  // correspond to any real, newly-created row — which surfaced as
+  // "violates foreign key constraint customers_user_id_fkey".
+  if (Array.isArray(authData.user.identities) && authData.user.identities.length === 0) {
+    return {
+      customerId: null,
+      error: "An account with this email already exists — try signing in instead.",
+      alreadyRegistered: true,
+    };
+  }
+
+  const signupResult = await ensureCustomerRecord({ userId: authData.user.id, email, name, phone, driverId });
 
   if (signupResult.error) {
     return { customerId: null, error: signupResult.error };
@@ -72,6 +62,39 @@ export async function signUpCustomer({ email, password, name, phone, driverId })
   }
 
   return { customerId: signupResult.customerId, error: null };
+}
+
+/**
+ * Creates the customers row server-side (signup-customer Edge
+ * Function) rather than via a direct client insert — that used to fail
+ * with "new row violates row-level security policy for table
+ * customers", either because email confirmation is required (so
+ * there's no active session yet to satisfy an auth.uid()-based policy)
+ * or because no INSERT policy permits it at all. The Edge Function
+ * bypasses RLS with the service role key and is idempotent (a repeat
+ * call for a user_id+driverId that already has a row just returns it),
+ * so it's also safe to use as a self-heal after sign-in — see
+ * App.jsx's resolveCustomerForSession, which calls this with no
+ * name/phone (defaulted server-side) to repair any account that got
+ * stuck with a real Auth user but a missing customers row from before
+ * this fix existed.
+ */
+export async function ensureCustomerRecord({ userId, email, name, phone, driverId }) {
+  return fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-customer`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      email,
+      name: name || null,
+      phone: phone || null,
+      driver_id: driverId,
+    }),
+  }).then((r) => r.json());
 }
 
 export async function signInCustomer(email, password) {

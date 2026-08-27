@@ -9,7 +9,7 @@ import GuestAccountChoice from "./GuestAccountChoice.jsx";
 import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 import { createBooking } from "./bookingApi.js";
-import { getCustomerForDriver, signOutCustomer } from "./customerAuth.js";
+import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./customerAuth.js";
 import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
 
@@ -127,7 +127,27 @@ export default function App() {
         setCustomerSession(null);
         return;
       }
-      const { customer } = await getCustomerForDriver(session.user.id, driverId);
+      let { customer } = await getCustomerForDriver(session.user.id, driverId);
+
+      if (!customer) {
+        // Self-heal: a real Supabase Auth account with no matching
+        // customers row is exactly the limbo state the earlier RLS bug
+        // (and the "already registered" foreign-key bug right after
+        // it) could leave someone in. Rather than require anyone
+        // caught by either bug to somehow know to contact support,
+        // just repair it transparently the next time they're signed
+        // in — ensureCustomerRecord is idempotent, so this is a no-op
+        // for every passenger who was never affected.
+        const healResult = await ensureCustomerRecord({
+          userId: session.user.id,
+          email: session.user.email,
+          driverId,
+        });
+        if (!healResult.error) {
+          ({ customer } = await getCustomerForDriver(session.user.id, driverId));
+        }
+      }
+
       setCustomerSession({
         userId: session.user.id,
         accessToken: session.access_token,
