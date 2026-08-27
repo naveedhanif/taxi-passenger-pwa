@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft } from "lucide-react";
+import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle } from "lucide-react";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -71,6 +71,7 @@ function BookingRow({ booking, onSelect }) {
  * @param {function} props.onSelectBooking
  * @param {function} [props.onDeleteLocation]
  * @param {function} props.onSignOut
+ * @param {function} [props.onUpdateProfile] - (name, phone) => Promise<{error?: string}>; the real, direct way to fix a wrong name/phone, instead of relying on it getting picked up from a future booking form
  */
 export default function AccountHistoryScreen({
   customer = null,
@@ -80,12 +81,45 @@ export default function AccountHistoryScreen({
   onDeleteLocation = () => {},
   onSignOut = () => {},
   onBack = () => {},
+  onUpdateProfile = null,
 }) {
   useGoogleFont();
   const [tab, setTab] = useState("upcoming");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   const { upcoming, past } = useMemo(() => categorizeBookings(bookings), [bookings]);
   const visibleBookings = tab === "upcoming" ? upcoming : past;
+
+  // A name that's really just the email's local part (left behind by an
+  // account that got auto-repaired from email alone at some point) isn't
+  // a real name — flag it so the header can prompt for the real one
+  // instead of quietly displaying it as if it were correct.
+  const nameLooksLikePlaceholder =
+    customer?.email && customer?.name && customer.email.toLowerCase().startsWith(customer.name.toLowerCase());
+
+  function startEditingProfile() {
+    setEditName(nameLooksLikePlaceholder ? "" : customer?.name || "");
+    setEditPhone(customer?.phone || "");
+    setProfileError("");
+    setEditingProfile(true);
+  }
+
+  async function saveProfile() {
+    if (!onUpdateProfile) return;
+    setSavingProfile(true);
+    setProfileError("");
+    const result = await onUpdateProfile(editName.trim(), editPhone.trim());
+    setSavingProfile(false);
+    if (result?.error) {
+      setProfileError(result.error);
+      return;
+    }
+    setEditingProfile(false);
+  }
 
   if (!customer) {
     return (
@@ -109,7 +143,7 @@ export default function AccountHistoryScreen({
   return (
     <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}>
       {/* Account header */}
-      <div className="mb-5 flex items-center gap-3">
+      <div className="mb-5 flex items-start gap-3">
         <button
           onClick={onBack}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
@@ -118,18 +152,92 @@ export default function AccountHistoryScreen({
         >
           <ArrowLeft size={15} color="#5F5E5A" />
         </button>
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
-        >
-          {customer.name?.charAt(0) || <User size={18} />}
-        </div>
-        <div>
-          <div className="text-base font-semibold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
-            {customer.name || "Your account"}
+
+        {editingProfile ? (
+          <div className="flex-1 rounded-xl p-3" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+            <div className="mb-2 space-y-2">
+              <div
+                className="flex items-center gap-2 rounded-lg px-3 py-2"
+                style={{ background: "#F0EEE7", boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)" }}
+              >
+                <User size={14} color="#8C8977" />
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
+                  style={{ color: "#2C2C2A" }}
+                />
+              </div>
+              <div
+                className="flex items-center gap-2 rounded-lg px-3 py-2"
+                style={{ background: "#F0EEE7", boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)" }}
+              >
+                <Phone size={14} color="#8C8977" />
+                <input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="Phone number"
+                  type="tel"
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
+                  style={{ color: "#2C2C2A" }}
+                />
+              </div>
+            </div>
+            {profileError && (
+              <div className="mb-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                <AlertCircle size={12} /> {profileError}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={saveProfile}
+                disabled={savingProfile || !editName.trim()}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+              >
+                <Check size={13} /> {savingProfile ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => setEditingProfile(false)}
+                disabled={savingProfile}
+                className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-[#5F5E5A]"
+                style={{ background: "#F0EEE7" }}
+              >
+                <X size={13} />
+              </button>
+            </div>
           </div>
-          <div className="text-xs text-[#5F5E5A]">{customer.phone || customer.email}</div>
-        </div>
+        ) : (
+          <div className="flex flex-1 items-center gap-3">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+              style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+            >
+              {!nameLooksLikePlaceholder && customer.name?.charAt(0)?.toUpperCase() || <User size={18} />}
+            </div>
+            <div className="flex-1">
+              {nameLooksLikePlaceholder ? (
+                <div className="text-sm font-medium" style={{ color: "#633806" }}>Add your name</div>
+              ) : (
+                <div className="text-base font-semibold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+                  {customer.name || "Your account"}
+                </div>
+              )}
+              <div className="text-xs text-[#5F5E5A]">{customer.phone || "Add a phone number"}</div>
+            </div>
+            {onUpdateProfile && (
+              <button
+                onClick={startEditingProfile}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                aria-label="Edit profile"
+              >
+                <Pencil size={13} color="#5F5E5A" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Saved locations */}

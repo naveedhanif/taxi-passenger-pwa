@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Menu, X, AlertCircle, Loader2, ArrowLeft, Home as HomeIcon } from "lucide-react";
+import { Menu, X, AlertCircle, Loader2, ArrowLeft, Home as HomeIcon, CheckCircle2 } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
 import FareEstimateScreen from "./FareEstimateScreen.jsx";
@@ -40,6 +40,12 @@ const SCREENS = [
 function guestBookingStorageKey(driverId) {
   return `taxi_guest_booking_${driverId}`;
 }
+
+const STATUS_ALERT_STYLES = {
+  success: { background: "#EAF3DE", color: "#27500A", border: "1px solid #CFE3B8" },
+  info: { background: "#E6F1FB", color: "#0C447C", border: "1px solid #C3DCF3" },
+  error: { background: "#FCEBEB", color: "#791F1F", border: "1px solid #F3C6C6" },
+};
 
 export default function App() {
   const [screen, setScreen] = useState("booking");
@@ -184,11 +190,19 @@ export default function App() {
   useEffect(() => {
     const c = customerSession?.customer;
     if (!c) return;
+    // A self-heal (see resolveCustomerForSession above) that only ever
+    // had an email to work with fills `name` with the email's local
+    // part as a placeholder. Auto-filling THAT into the form is worse
+    // than leaving it blank — it looks like real data, so a passenger
+    // has no reason to notice or correct it. Detect and skip it
+    // specifically, so the field stays empty and genuinely prompts
+    // them to type their real name once.
+    const looksLikeEmailPlaceholder = c.email && c.name && c.email.toLowerCase().startsWith(c.name.toLowerCase());
     setBookingDraft((prev) => {
       if (prev.passengerName || prev.passengerPhone || prev.passengerEmail) return prev;
       return {
         ...prev,
-        passengerName: c.name || "",
+        passengerName: looksLikeEmailPlaceholder ? "" : c.name || "",
         passengerPhone: c.phone || "",
         passengerEmail: c.email || "",
       };
@@ -238,21 +252,33 @@ export default function App() {
     }
   }
 
-  // ---- Top-level cancellation watcher ----
+  // ---- Top-level status-change watcher ----
   // The live tracking screen (passenger-booking-status.jsx) already
-  // polls and shows cancellation clearly — but only while the passenger
-  // is actually looking at that screen. A driver cancelling while the
-  // passenger is sitting on the main booking screen (or anywhere else)
-  // previously produced no notification at all — nothing was watching
-  // from outside that one screen. This polls independently of `screen`
-  // and shows an immediate, hard-to-miss banner the moment it detects
-  // the change, wherever the passenger currently is.
-  const [cancellationAlert, setCancellationAlert] = useState(null); // { refunded: boolean } | null
+  // shows status clearly — but only while the passenger is actually
+  // looking at that screen. Previously ONLY cancellation was watched
+  // for from outside that screen; a driver confirming, going en route,
+  // or arriving produced no notification at all if the passenger was
+  // anywhere else (e.g. the main booking screen). This polls
+  // independently of `screen` and shows an immediate banner for every
+  // meaningful transition, wherever the passenger currently is.
+  const STATUS_ALERTS = {
+    confirmed: { tone: "info", title: "Booking confirmed", message: "Your driver has confirmed your booking." },
+    en_route: { tone: "info", title: "Driver on the way", message: "Your driver is heading to your pickup location." },
+    arrived: { tone: "success", title: "Driver has arrived", message: "Your driver is waiting outside." },
+    in_progress: { tone: "info", title: "Trip started", message: "Your trip is now in progress." },
+    completed: { tone: "success", title: "Trip completed", message: "Thanks for riding — hope it went well!" },
+    canceled: { tone: "error", title: "Booking cancelled", message: null }, // message filled in from refund status below
+  };
+  const [statusAlert, setStatusAlert] = useState(null); // { tone, title, message } | null
   const lastKnownStatusRef = useRef(null);
+  const statusInitializedRef = useRef(false);
 
   useEffect(() => {
     const trackedBookingId = bookingResult?.bookingId ?? activeGuestBooking?.bookingId;
-    if (!trackedBookingId) return;
+    if (!trackedBookingId) {
+      statusInitializedRef.current = false;
+      return;
+    }
 
     const guestAccessToken = customerSession?.customer ? null : bookingResult?.accessToken ?? activeGuestBooking?.accessToken;
     const customerSessionToken = customerSession?.accessToken || null;
@@ -263,22 +289,39 @@ export default function App() {
       if (cancelledEffect || result.error) return;
 
       const newStatus = result.booking.status;
-      const wasAlreadyKnownCanceled = lastKnownStatusRef.current === "canceled";
+      const previousStatus = lastKnownStatusRef.current;
       lastKnownStatusRef.current = newStatus;
 
-      if (newStatus === "canceled" && !wasAlreadyKnownCanceled && screen !== "status") {
-        setCancellationAlert({ refunded: result.booking.refunded });
+      // Skip alerting on the very first read for this booking — that's
+      // just establishing a baseline, not a transition the passenger
+      // actually witnessed happen.
+      if (statusInitializedRef.current && newStatus !== previousStatus && screen !== "status") {
+        const alertContent = STATUS_ALERTS[newStatus];
+        if (alertContent) {
+          setStatusAlert(
+            newStatus === "canceled"
+              ? {
+                  ...alertContent,
+                  message: result.booking.refunded
+                    ? "Your refund is on the way — it can take a few days to appear on your statement."
+                    : "Contact your driver if you were expecting a refund.",
+                }
+              : alertContent
+          );
+        }
       }
+      statusInitializedRef.current = true;
+
       if (["completed", "canceled"].includes(newStatus)) {
         clearInterval(intervalId);
       }
     }
 
     poll();
-    // Deliberately slower than the live tracking screen's own 8s poll
-    // — this is a background watcher, not the primary status display,
-    // so it doesn't need to be as snappy.
-    const intervalId = setInterval(poll, 15000);
+    // Deliberately a bit slower than the live tracking screen's own 8s
+    // poll — this is a background watcher, not the primary status
+    // display, but still fast enough to feel close to real-time.
+    const intervalId = setInterval(poll, 10000);
 
     return () => {
       cancelledEffect = true;
@@ -655,30 +698,30 @@ export default function App() {
       </div>
 
       <div className="py-6">
-        {cancellationAlert && (
+        {statusAlert && (
           <div
             className="mx-auto mb-4 flex w-full max-w-[400px] items-start gap-3 rounded-xl p-4 text-sm"
-            style={{ background: "#FCEBEB", color: "#791F1F", border: "1px solid #F3C6C6" }}
+            style={STATUS_ALERT_STYLES[statusAlert.tone]}
           >
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            {statusAlert.tone === "success" ? (
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+            ) : (
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            )}
             <div className="flex-1">
-              <div className="font-semibold">Your booking was cancelled</div>
-              <div className="mt-0.5">
-                {cancellationAlert.refunded
-                  ? "Your refund is on the way — it can take a few days to appear on your statement."
-                  : "Contact your driver if you were expecting a refund."}
-              </div>
+              <div className="font-semibold">{statusAlert.title}</div>
+              <div className="mt-0.5">{statusAlert.message}</div>
               <div className="mt-2 flex gap-3">
                 <button
                   onClick={() => {
-                    setCancellationAlert(null);
+                    setStatusAlert(null);
                     go("status");
                   }}
                   className="text-xs font-semibold underline"
                 >
                   View details
                 </button>
-                <button onClick={() => setCancellationAlert(null)} className="text-xs font-medium opacity-70">
+                <button onClick={() => setStatusAlert(null)} className="text-xs font-medium opacity-70">
                   Dismiss
                 </button>
               </div>
@@ -862,6 +905,20 @@ export default function App() {
                 }}
                 onSignOut={handleSignOut}
                 onBack={goBack}
+                onUpdateProfile={async (name, phone) => {
+                  const result = await ensureCustomerRecord({
+                    userId: customerSession.userId,
+                    email: customerSession.customer.email,
+                    name: name || null,
+                    phone: phone || null,
+                    driverId,
+                  });
+                  if (result.error) return { error: result.error };
+                  setCustomerSession((prev) =>
+                    prev ? { ...prev, customer: { ...prev.customer, name, phone } } : prev
+                  );
+                  return {};
+                }}
               />
             )}
           </>
