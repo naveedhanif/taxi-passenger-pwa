@@ -25,23 +25,53 @@ export async function signUpCustomer({ email, password, name, phone, driverId })
     return { customerId: null, error: "Check your email to confirm your account before signing in." };
   }
 
-  const { data: customerRow, error: customerError } = await supabase
-    .from("customers")
-    .insert({
-      user_id: authData.user.id,
-      driver_id: driverId,
-      name,
-      phone,
-      email,
-    })
-    .select("id")
-    .single();
+  // The customers row is created server-side (signup-customer Edge
+  // Function) rather than via a direct client insert here — that used
+  // to fail with "new row violates row-level security policy for table
+  // customers", either because email confirmation is required (so
+  // there's no active session yet to satisfy an auth.uid()-based
+  // policy) or because no INSERT policy permits it at all. The Edge
+  // Function bypasses RLS with the service role key after
+  // independently verifying the user_id is real, so it works
+  // regardless of which case applies.
+  const signupResult = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-customer`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        user_id: authData.user.id,
+        email,
+        name,
+        phone: phone || null,
+        driver_id: driverId,
+      }),
+    }
+  ).then((r) => r.json());
 
-  if (customerError) {
-    return { customerId: null, error: customerError.message };
+  if (signupResult.error) {
+    return { customerId: null, error: signupResult.error };
   }
 
-  return { customerId: customerRow.id, error: null };
+  if (!authData.session) {
+    // Email confirmation is required by this Supabase project — the
+    // account + customer row both exist now, but the browser has no
+    // active session until the passenger clicks the confirmation link.
+    // Being explicit about this here instead of silently treating it
+    // as "signed in" avoids a confusing state where the UI acts
+    // authenticated but every subsequent request fails.
+    return {
+      customerId: signupResult.customerId,
+      error: null,
+      needsEmailConfirmation: true,
+    };
+  }
+
+  return { customerId: signupResult.customerId, error: null };
 }
 
 export async function signInCustomer(email, password) {

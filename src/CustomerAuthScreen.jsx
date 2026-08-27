@@ -44,6 +44,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -55,6 +56,10 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
       setSubmitting(false);
       if (result.error) {
         setErrorMessage(result.error);
+        return;
+      }
+      if (result.needsEmailConfirmation) {
+        setConfirmationSent(true);
         return;
       }
       onAuthSuccess?.({ customerId: result.customerId });
@@ -83,6 +88,27 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         <div className="w-11" />
       </div>
 
+      {confirmationSent ? (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <Mail size={28} color="#185FA5" />
+          <div className="text-base font-semibold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+            Check your email
+          </div>
+          <div className="max-w-xs text-sm text-[#5F5E5A]">
+            We've sent a confirmation link to {email}. Tap it, then come back and sign in.
+          </div>
+          <button
+            onClick={() => {
+              setConfirmationSent(false);
+              setMode("signin");
+            }}
+            className="mt-2 text-xs font-medium text-[#185FA5]"
+          >
+            Back to sign in
+          </button>
+        </div>
+      ) : (
+        <>
       <div className="mb-1 text-xl" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700, color: "#2C2C2A" }}>
         {mode === "signup" ? "Create your account" : "Welcome back"}
       </div>
@@ -123,6 +149,8 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
       >
         {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
       </button>
+      </>
+      )}
     </div>
   );
 }
