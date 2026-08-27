@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight } from "lucide-react";
+import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft } from "lucide-react";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -79,6 +79,7 @@ export default function AccountHistoryScreen({
   onSelectBooking = () => {},
   onDeleteLocation = () => {},
   onSignOut = () => {},
+  onBack = () => {},
 }) {
   useGoogleFont();
   const [tab, setTab] = useState("upcoming");
@@ -88,9 +89,19 @@ export default function AccountHistoryScreen({
 
   if (!customer) {
     return (
-      <div className="mx-auto flex w-full max-w-[400px] flex-col items-center justify-center gap-2 p-10 text-center" style={{ minHeight: 400 }}>
-        <User size={22} color="#8C8977" />
-        <div className="text-sm text-[#5F5E5A]">Sign in to see your account and booking history.</div>
+      <div className="mx-auto w-full max-w-[400px] p-5" style={{ minHeight: 400 }}>
+        <button
+          onClick={onBack}
+          className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
+          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          aria-label="Back"
+        >
+          <ArrowLeft size={15} color="#5F5E5A" />
+        </button>
+        <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+          <User size={22} color="#8C8977" />
+          <div className="text-sm text-[#5F5E5A]">Sign in to see your account and booking history.</div>
+        </div>
       </div>
     );
   }
@@ -99,8 +110,16 @@ export default function AccountHistoryScreen({
     <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}>
       {/* Account header */}
       <div className="mb-5 flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          aria-label="Back"
+        >
+          <ArrowLeft size={15} color="#5F5E5A" />
+        </button>
         <div
-          className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-semibold text-white"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
           style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
         >
           {customer.name?.charAt(0) || <User size={18} />}

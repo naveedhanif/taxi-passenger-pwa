@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Menu, X, AlertCircle, Loader2 } from "lucide-react";
+import { Menu, X, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
 import FareEstimateScreen from "./FareEstimateScreen.jsx";
@@ -36,7 +36,13 @@ const SCREENS = [
   { id: "status", label: "6. Live tracking" },
   { id: "account", label: "7. Account/history" },
 ];
-const DEV_NAV = import.meta.env.DEV;
+// Shown either in local dev (npm run dev) OR when explicitly requested
+// via ?dev=1 on the deployed site — e.g.
+// taxi-passenger-pwa.vercel.app/johns-taxi?dev=1 — so testing every
+// screen on the real deployed build doesn't require running a local
+// dev server. Never appears for a real passenger's ordinary QR-code
+// link, since that link has no ?dev=1 on it.
+const DEV_NAV = import.meta.env.DEV || new URLSearchParams(window.location.search).get("dev") === "1";
 
 function guestBookingStorageKey(driverId) {
   return `taxi_guest_booking_${driverId}`;
@@ -702,12 +708,32 @@ export default function App() {
         {screen === "account" && (
           <>
             {loadingAccount ? (
-              <div className="mx-auto flex w-full max-w-[400px] items-center justify-center gap-2 p-10 text-sm text-[#5F5E5A]">
-                <Loader2 size={16} className="animate-spin" /> Loading your account…
+              <div className="mx-auto w-full max-w-[400px] p-5">
+                <button
+                  onClick={goBack}
+                  className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
+                  style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                  aria-label="Back"
+                >
+                  <ArrowLeft size={15} color="#5F5E5A" />
+                </button>
+                <div className="flex items-center justify-center gap-2 p-10 text-sm text-[#5F5E5A]">
+                  <Loader2 size={16} className="animate-spin" /> Loading your account…
+                </div>
               </div>
             ) : accountError ? (
-              <div className="mx-auto flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
-                <AlertCircle size={16} /> {accountError}
+              <div className="mx-auto w-full max-w-[400px] p-5">
+                <button
+                  onClick={goBack}
+                  className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
+                  style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                  aria-label="Back"
+                >
+                  <ArrowLeft size={15} color="#5F5E5A" />
+                </button>
+                <div className="flex items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                  <AlertCircle size={16} /> {accountError}
+                </div>
               </div>
             ) : (
               <AccountHistoryScreen
@@ -719,6 +745,7 @@ export default function App() {
                   go("status");
                 }}
                 onSignOut={handleSignOut}
+                onBack={goBack}
               />
             )}
           </>
