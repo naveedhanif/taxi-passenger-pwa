@@ -1,0 +1,52 @@
+<div style="display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1.5rem 0;">
+  <div style="background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+    <div id="qr-container" style="width: 240px; height: 240px; display: flex; align-items: center; justify-content: center;"></div>
+    <div style="text-align: center;">
+      <p style="font-weight: 500; font-size: 15px; margin: 0 0 4px;">John's Taxi</p>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 0; word-break: break-all;">taxi-passenger-pwa.vercel.app/johns-taxi</p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <button id="download-btn" style="display: flex; align-items: center; gap: 6px;">
+      <i class="ti ti-download" style="font-size: 16px;" aria-hidden="true"></i>
+      Download PNG
+    </button>
+    <button id="copy-link-btn" style="display: flex; align-items: center; gap: 6px;">
+      <i class="ti ti-copy" style="font-size: 16px;" aria-hidden="true"></i>
+      Copy link
+    </button>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  const bookingUrl = "https://taxi-passenger-pwa.vercel.app/johns-taxi";
+
+  new QRCode(document.getElementById("qr-container"), {
+    text: bookingUrl,
+    width: 220,
+    height: 220,
+    colorDark: "#000000",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  document.getElementById("download-btn").addEventListener("click", function() {
+    const canvas = document.querySelector("#qr-container canvas");
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = "johns-taxi-booking-qr.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  });
+
+  document.getElementById("copy-link-btn").addEventListener("click", function() {
+    navigator.clipboard.writeText(bookingUrl).then(function() {
+      const btn = document.getElementById("copy-link-btn");
+      const original = btn.innerHTML;
+      btn.innerHTML = '<i class="ti ti-check" style="font-size: 16px;" aria-hidden="true"></i>Copied';
+      setTimeout(function() {
+        btn.innerHTML = original;
+      }, 1500);
+    });
+  });
+</script>

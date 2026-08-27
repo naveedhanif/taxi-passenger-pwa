@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
+import { formatPhoneForLinks } from "./phoneLinks.js";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -93,9 +94,12 @@ export default function PassengerBooking({
   onDraftChange,
   isDriverAvailable = true,
   driverId,
+  driverPhoneNumber,
+  onOpenAccount,
 }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
+  const phoneLinks = formatPhoneForLinks(driverPhoneNumber);
 
   // Persisted fields live in the parent's `draft` object (App.jsx) so
   // they survive navigating away from this screen and back — this
@@ -350,11 +354,13 @@ export default function PassengerBooking({
           </div>
         </div>
         <button
+          onClick={onOpenAccount}
           className="flex h-11 w-11 items-center justify-center rounded-full"
           style={{
             background: "#F0EEE7",
             boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)",
           }}
+          aria-label="Sign in / account"
         >
           <User size={15} color="#5F5E5A" />
         </button>
@@ -417,6 +423,30 @@ export default function PassengerBooking({
           )}
         </div>
       </div>
+
+      {/* Contact the driver directly — visible before booking, not just
+          after. Uses the same phoneLinks helper as the post-booking
+          confirmation/tracking screens for consistent tel:/wa.me links. */}
+      {phoneLinks && (
+        <div className="mb-5 flex gap-2">
+          <a
+            href={`tel:${phoneLinks.tel}`}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-[#2C2C2A]"
+            style={{ background: "#F0EEE7", boxShadow: "2px 2px 5px rgba(44,44,42,0.1), -2px -2px 5px rgba(255,255,255,0.7)" }}
+          >
+            <Phone size={13} /> Call {businessName ? businessName.split(" ")[0] : "driver"}
+          </a>
+          <a
+            href={`https://wa.me/${phoneLinks.whatsapp}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-white"
+            style={{ background: "#25D366" }}
+          >
+            <MessageCircle size={13} /> WhatsApp
+          </a>
+        </div>
+      )}
 
       <MapPreview hasRoute={pickup.trim().length > 0 && dropoff.trim().length > 0} />
 

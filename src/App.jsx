@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Menu, X, AlertCircle, Loader2 } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
@@ -9,6 +9,8 @@ import GuestAccountChoice from "./GuestAccountChoice.jsx";
 import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 import { createBooking } from "./bookingApi.js";
+import { getCustomerForDriver, signOutCustomer } from "./customerAuth.js";
+import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
@@ -17,6 +19,13 @@ import { supabase } from "./supabaseClient.js";
 const DEMO_PICKUP = { lat: 53.3418, lng: -6.2603, address: "Grafton Street" };
 const DEMO_DROPOFF = { lat: 53.4264, lng: -6.2499, address: "Dublin Airport" };
 
+// Only ever shown in `npm run dev` (import.meta.env.DEV), never in the
+// production build Vercel serves. This used to render unconditionally,
+// which let a real passenger manually jump to "3. Payment" or
+// "6. Live tracking" with no real booking behind it — that's what was
+// causing the stale "No booking yet" message and the fully-mocked
+// tracking screen to appear for real users, not just a UI bug on those
+// screens themselves.
 const SCREENS = [
   { id: "booking", label: "1. Booking form" },
   { id: "fare", label: "2. Fare estimate" },
@@ -27,10 +36,27 @@ const SCREENS = [
   { id: "status", label: "6. Live tracking" },
   { id: "account", label: "7. Account/history" },
 ];
+const DEV_NAV = import.meta.env.DEV;
+
+function guestBookingStorageKey(driverId) {
+  return `taxi_guest_booking_${driverId}`;
+}
 
 export default function App() {
   const [screen, setScreen] = useState("booking");
   const [menuOpen, setMenuOpen] = useState(false);
+  // One-level "back" support for sub-screens (status/account/auth) —
+  // this app is a flat state-driven screen switcher, not a router, so
+  // this just remembers whichever screen was active right before
+  // navigating into a sub-screen and returns to exactly that.
+  const prevScreenRef = useRef("booking");
+  function go(next) {
+    prevScreenRef.current = screen;
+    setScreen(next);
+  }
+  function goBack() {
+    setScreen(prevScreenRef.current);
+  }
 
   // Resolved once on load from the URL slug — this IS the multi-tenant
   // routing mechanism. null while resolving, "not_found" if the slug
@@ -83,6 +109,123 @@ export default function App() {
   // form); create-booking re-checks this server-side regardless, since
   // this read can go stale between page-load and submit.
   const [isDriverAvailable, setIsDriverAvailable] = useState(true);
+
+  // ---- Real customer session (signed-in passengers) ----
+  // Resolved from Supabase Auth, not assumed. Used to (a) pass the real
+  // session token into createBooking so the booking actually attaches
+  // to this customer's account instead of always being a guest booking,
+  // and (b) drive AccountHistoryScreen with real data. authOrigin
+  // remembers *why* the passenger went to sign in, so success routes
+  // them somewhere sensible instead of always the same place.
+  const [customerSession, setCustomerSession] = useState(null); // { userId, accessToken, customer:{id,name,phone,email} } | null
+  const [resolvingSession, setResolvingSession] = useState(true);
+  const authOriginRef = useRef("account"); // "account" | "post-booking"
+
+  const resolveCustomerForSession = useCallback(
+    async (session) => {
+      if (!session?.user || !driverId) {
+        setCustomerSession(null);
+        return;
+      }
+      const { customer } = await getCustomerForDriver(session.user.id, driverId);
+      setCustomerSession({
+        userId: session.user.id,
+        accessToken: session.access_token,
+        customer: customer || null,
+      });
+    },
+    [driverId]
+  );
+
+  useEffect(() => {
+    if (!driverId) return;
+    let cancelled = false;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      resolveCustomerForSession(data.session).finally(() => setResolvingSession(false));
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      resolveCustomerForSession(session);
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, [driverId, resolveCustomerForSession]);
+
+  // ---- Guest booking persistence ----
+  // Without a real router, a page refresh resets `screen` back to
+  // "booking" and loses bookingResult from memory — which used to mean
+  // a guest who just paid, then refreshed, had no way back to their live
+  // tracking page at all. Persisting the essentials (bookingId + the
+  // per-booking access_token get-booking-status accepts) to
+  // localStorage fixes that for guests; signed-in customers instead
+  // reach it via Account → their booking, so they don't need this.
+  const [activeGuestBooking, setActiveGuestBooking] = useState(null); // { bookingId, accessToken } | null
+
+  useEffect(() => {
+    if (!driverId) return;
+    try {
+      const raw = localStorage.getItem(guestBookingStorageKey(driverId));
+      if (raw) setActiveGuestBooking(JSON.parse(raw));
+    } catch {
+      // Corrupt/blocked storage — just proceed with no persisted booking.
+    }
+  }, [driverId]);
+
+  function persistGuestBooking(bookingId, accessToken) {
+    if (!driverId) return;
+    const value = { bookingId, accessToken };
+    setActiveGuestBooking(value);
+    try {
+      localStorage.setItem(guestBookingStorageKey(driverId), JSON.stringify(value));
+    } catch {
+      // Ignore storage failures — tracking still works for this session,
+      // just won't survive a refresh.
+    }
+  }
+
+  function clearGuestBooking() {
+    setActiveGuestBooking(null);
+    if (driverId) {
+      try {
+        localStorage.removeItem(guestBookingStorageKey(driverId));
+      } catch {
+        // Ignore.
+      }
+    }
+  }
+
+  // ---- Account history (signed-in customers only — see customerAuth.js:
+  // an account is scoped to one driver, so there's no cross-driver
+  // history to show) ----
+  const [accountBookings, setAccountBookings] = useState([]);
+  const [accountError, setAccountError] = useState("");
+  const [loadingAccount, setLoadingAccount] = useState(false);
+
+  async function loadAccountHistory() {
+    if (!customerSession?.accessToken || !driverId) return;
+    setLoadingAccount(true);
+    const result = await getCustomerBookings({ driverId, customerSessionToken: customerSession.accessToken });
+    setLoadingAccount(false);
+    if (result.error) {
+      setAccountError(result.error);
+      return;
+    }
+    setAccountError("");
+    setAccountBookings(result.bookings || []);
+    // The server is the source of truth for the customer's own name/
+    // phone/email — refresh it here too in case it was edited elsewhere.
+    setCustomerSession((prev) => (prev ? { ...prev, customer: result.customer } : prev));
+  }
+
+  useEffect(() => {
+    if (screen === "account") loadAccountHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
 
   // Step 1: resolve the URL path (e.g. /johns-taxi) to a real driver id
   // via booking_slug. This is what makes one deployed app work for every
@@ -234,13 +377,13 @@ export default function App() {
     }
 
     setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, scheduledTime });
-    setScreen("fare");
+    go("fare");
   }
 
   const currentLabel = SCREENS.find((s) => s.id === screen)?.label;
 
   function selectScreen(id) {
-    setScreen(id);
+    go(id);
     setMenuOpen(false);
   }
 
@@ -257,7 +400,12 @@ export default function App() {
       dropoff: formSelection?.dropoff ?? DEMO_DROPOFF,
       scheduledTime: formSelection?.scheduledTime ?? new Date(),
       paymentTiming: paymentTiming || "now",
-      accessToken: null, // null = guest booking; pass a real session token for signed-in customers
+      // A signed-in customer's real session token — not always null.
+      // Without this, create-booking has no way to resolve customer_id
+      // and every booking becomes a guest booking regardless of whether
+      // the passenger actually has an account, which is why account
+      // history could never show real past trips before.
+      accessToken: customerSession?.accessToken || null,
     });
 
     setCreatingBooking(false);
@@ -268,7 +416,43 @@ export default function App() {
     }
 
     setBookingResult(result);
-    setScreen("payment");
+    if (!customerSession?.customer) {
+      // Guest (or signed-in-but-no-customer-row-yet) booking — this is
+      // the only reliable way back to it after a refresh, since there's
+      // no login to fall back on.
+      persistGuestBooking(result.bookingId, result.accessToken);
+    }
+    go("payment");
+  }
+
+  function handleViewBooking() {
+    // Signed-in customers already have a durable way back to this
+    // booking (their account), so the "want to save this trip?" prompt
+    // — which exists specifically to get a GUEST to create one — would
+    // be redundant and confusing to show them. This is the fix for
+    // "guest and sign-up look the same": each passenger now only ever
+    // sees the ONE flow relevant to their actual state.
+    if (customerSession?.customer) {
+      go("status");
+    } else {
+      go("guest-choice");
+    }
+  }
+
+  function handleAuthSuccess() {
+    // resolveCustomerForSession runs automatically via onAuthStateChange
+    // once Supabase Auth's session updates, so customerSession will
+    // populate itself shortly after this — no need to duplicate that
+    // lookup here. Just route back to wherever the passenger meant to
+    // end up.
+    go(authOriginRef.current === "post-booking" ? "status" : "account");
+  }
+
+  async function handleSignOut() {
+    await signOutCustomer();
+    setCustomerSession(null);
+    setAccountBookings([]);
+    go("booking");
   }
 
   // ---- Slug resolution gate: nothing below renders until we know which
@@ -308,54 +492,56 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5]">
-      {/* Dev-only nav — not part of the real app, just for local testing */}
-
-      {/* Mobile: hamburger bar */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-[#ECE9E0] bg-[#F7F7F5]/95 px-4 py-3 backdrop-blur-md sm:hidden">
-        <span className="text-sm font-semibold text-[#2C2C2A]">{currentLabel}</span>
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Toggle screen menu"
-          className="flex h-11 w-11 items-center justify-center rounded-lg"
-          style={{ background: "#F0EEE7", color: "#2C2C2A" }}
-        >
-          {menuOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
-      </div>
-      {menuOpen && (
-        <div className="sticky top-[57px] z-30 flex flex-col gap-2 border-b border-[#ECE9E0] bg-[#F7F7F5] p-3 sm:hidden">
-          {SCREENS.map((s) => (
+      {DEV_NAV && (
+        <>
+          {/* Mobile: hamburger bar */}
+          <div className="sticky top-0 z-40 flex items-center justify-between border-b border-[#ECE9E0] bg-[#F7F7F5]/95 px-4 py-3 backdrop-blur-md sm:hidden">
+            <span className="text-sm font-semibold text-[#2C2C2A]">Dev nav: {currentLabel}</span>
             <button
-              key={s.id}
-              onClick={() => selectScreen(s.id)}
-              className="rounded-lg px-4 py-3.5 text-left text-sm font-medium"
-              style={{
-                background: screen === s.id ? "#185FA5" : "#F0EEE7",
-                color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
-              }}
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Toggle screen menu"
+              className="flex h-11 w-11 items-center justify-center rounded-lg"
+              style={{ background: "#F0EEE7", color: "#2C2C2A" }}
             >
-              {s.label}
+              {menuOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
-          ))}
-        </div>
-      )}
+          </div>
+          {menuOpen && (
+            <div className="sticky top-[57px] z-30 flex flex-col gap-2 border-b border-[#ECE9E0] bg-[#F7F7F5] p-3 sm:hidden">
+              {SCREENS.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => selectScreen(s.id)}
+                  className="rounded-lg px-4 py-3.5 text-left text-sm font-medium"
+                  style={{
+                    background: screen === s.id ? "#185FA5" : "#F0EEE7",
+                    color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
 
-      {/* Desktop / tablet: row of tabs */}
-      <div className="sticky top-0 z-40 hidden flex-wrap justify-center gap-2.5 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 p-4 backdrop-blur-md sm:flex">
-        {SCREENS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setScreen(s.id)}
-            className="rounded-lg px-4 py-2.5 text-sm font-medium"
-            style={{
-              background: screen === s.id ? "#185FA5" : "#F0EEE7",
-              color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
-            }}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+          {/* Desktop / tablet: row of tabs */}
+          <div className="sticky top-0 z-40 hidden flex-wrap justify-center gap-2.5 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 p-4 backdrop-blur-md sm:flex">
+            {SCREENS.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => go(s.id)}
+                className="rounded-lg px-4 py-2.5 text-sm font-medium"
+                style={{
+                  background: screen === s.id ? "#185FA5" : "#F0EEE7",
+                  color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="py-6">
         {driverDataError && (
@@ -372,19 +558,34 @@ export default function App() {
         )}
 
         {screen === "booking" && (
-          <PassengerBooking
-            onSubmit={handleBookingFormSubmit}
-            mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
-            vehicle={vehicle}
-            businessName={businessName}
-            avgRating={avgRating}
-            reviewCount={reviewCount}
-            licenceVerified={licenceVerified}
-            draft={bookingDraft}
-            onDraftChange={setBookingDraft}
-            isDriverAvailable={isDriverAvailable}
-            driverId={driverId}
-          />
+          <>
+            {!resolvingSession && activeGuestBooking && (
+              <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center justify-between gap-2 rounded-xl p-4 text-sm" style={{ background: "#E6F1FB", color: "#0C447C" }}>
+                <span>You have an active booking with this driver.</span>
+                <button onClick={() => go("status")} className="font-semibold underline shrink-0">
+                  View status
+                </button>
+              </div>
+            )}
+            <PassengerBooking
+              onSubmit={handleBookingFormSubmit}
+              mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
+              vehicle={vehicle}
+              businessName={businessName}
+              avgRating={avgRating}
+              reviewCount={reviewCount}
+              licenceVerified={licenceVerified}
+              draft={bookingDraft}
+              onDraftChange={setBookingDraft}
+              isDriverAvailable={isDriverAvailable}
+              driverId={driverId}
+              driverPhoneNumber={driverPhoneNumber}
+              onOpenAccount={() => {
+                authOriginRef.current = "account";
+                go(customerSession?.customer ? "account" : "auth");
+              }}
+            />
+          </>
         )}
 
         {screen === "fare" && (
@@ -397,7 +598,7 @@ export default function App() {
             preBookingFee={3.0}
             payLaterDepositAmount={payLaterDepositAmount}
             onConfirm={handleConfirmFare}
-            onBack={() => setScreen("booking")}
+            onBack={() => go("booking")}
           />
         )}
 
@@ -421,7 +622,7 @@ export default function App() {
             amount={bookingResult.paymentTiming === "later" ? bookingResult.depositAmount : bookingResult.fare.total}
             paymentTiming={bookingResult.paymentTiming}
             balanceDue={bookingResult.balanceDue}
-            onSuccess={() => setScreen("confirmed")}
+            onSuccess={() => go("confirmed")}
           />
         )}
 
@@ -440,14 +641,17 @@ export default function App() {
             balanceDue={bookingResult?.paymentTiming === "later" ? bookingResult?.balanceDue : null}
             driverName={businessName}
             driverPhoneNumber={driverPhoneNumber}
-            onViewBooking={() => setScreen("status")}
+            onViewBooking={handleViewBooking}
           />
         )}
 
         {screen === "guest-choice" && (
           <GuestAccountChoice
-            onCreateAccount={() => setScreen("auth")}
-            onDismiss={() => setScreen("status")}
+            onCreateAccount={() => {
+              authOriginRef.current = "post-booking";
+              go("auth");
+            }}
+            onDismiss={() => go("status")}
           />
         )}
 
@@ -455,14 +659,50 @@ export default function App() {
           <CustomerAuthScreen
             driverId={driverId}
             driverName={businessName}
-            onAuthSuccess={() => setScreen("account")}
-            onBack={() => setScreen("guest-choice")}
+            onAuthSuccess={handleAuthSuccess}
+            onBack={goBack}
           />
         )}
 
-        {screen === "status" && <BookingStatus />}
+        {screen === "status" && (
+          <BookingStatus
+            bookingId={bookingResult?.bookingId ?? activeGuestBooking?.bookingId}
+            guestAccessToken={customerSession?.customer ? null : bookingResult?.accessToken ?? activeGuestBooking?.accessToken}
+            customerSessionToken={customerSession?.accessToken || null}
+            onBack={goBack}
+            onBookAgain={() => {
+              clearGuestBooking();
+              setBookingResult(null);
+              setFormSelection(null);
+              go("booking");
+            }}
+          />
+        )}
 
-        {screen === "account" && <AccountHistoryScreen />}
+        {screen === "account" && (
+          <>
+            {loadingAccount ? (
+              <div className="mx-auto flex w-full max-w-[400px] items-center justify-center gap-2 p-10 text-sm text-[#5F5E5A]">
+                <Loader2 size={16} className="animate-spin" /> Loading your account…
+              </div>
+            ) : accountError ? (
+              <div className="mx-auto flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                <AlertCircle size={16} /> {accountError}
+              </div>
+            ) : (
+              <AccountHistoryScreen
+                customer={customerSession?.customer || null}
+                bookings={accountBookings}
+                savedLocations={[]}
+                onSelectBooking={(booking) => {
+                  setBookingResult({ bookingId: booking.id, accessToken: null, paymentTiming: null, fare: null });
+                  go("status");
+                }}
+                onSignOut={handleSignOut}
+              />
+            )}
+          </>
+        )}
       </div>
 
       {/* Version badge — small, fixed, out of the way. Exists purely so
@@ -502,4 +742,3 @@ function VersionBadge() {
     </button>
   );
 }
-

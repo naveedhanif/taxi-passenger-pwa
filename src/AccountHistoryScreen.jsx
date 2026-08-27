@@ -63,30 +63,19 @@ function BookingRow({ booking, onSelect }) {
   );
 }
 
-const DEMO_BOOKINGS = [
-  { id: "1", status: "confirmed", scheduled_time: "2026-08-25T14:00:00", pickup_address: "Grafton St", dropoff_address: "Dublin Airport" },
-  { id: "2", status: "completed", scheduled_time: "2026-08-10T09:30:00", pickup_address: "Temple Bar", dropoff_address: "Dun Laoghaire" },
-  { id: "3", status: "completed", scheduled_time: "2026-07-28T18:00:00", pickup_address: "IFSC", dropoff_address: "Malahide" },
-];
-const DEMO_LOCATIONS = [
-  { id: "l1", label: "Home", address: "14 Rathmines Rd, Dublin 6" },
-  { id: "l2", label: "Work", address: "1 Grand Canal Sq, Dublin 2" },
-];
-const DEMO_CUSTOMER = { name: "Sarah Kelly", phone: "+353 87 123 4567", email: "" };
-
 /**
  * @param {object} props
- * @param {{name:string,phone:string,email:string}} props.customer
+ * @param {{name:string,phone:string,email:string}|null} props.customer
  * @param {Array} props.bookings
- * @param {Array} props.savedLocations - [{id, label, address}]
+ * @param {Array} [props.savedLocations] - [{id, label, address}]
  * @param {function} props.onSelectBooking
- * @param {function} props.onDeleteLocation
+ * @param {function} [props.onDeleteLocation]
  * @param {function} props.onSignOut
  */
 export default function AccountHistoryScreen({
-  customer = DEMO_CUSTOMER,
-  bookings = DEMO_BOOKINGS,
-  savedLocations = DEMO_LOCATIONS,
+  customer = null,
+  bookings = [],
+  savedLocations = [],
   onSelectBooking = () => {},
   onDeleteLocation = () => {},
   onSignOut = () => {},
@@ -96,6 +85,15 @@ export default function AccountHistoryScreen({
 
   const { upcoming, past } = useMemo(() => categorizeBookings(bookings), [bookings]);
   const visibleBookings = tab === "upcoming" ? upcoming : past;
+
+  if (!customer) {
+    return (
+      <div className="mx-auto flex w-full max-w-[400px] flex-col items-center justify-center gap-2 p-10 text-center" style={{ minHeight: 400 }}>
+        <User size={22} color="#8C8977" />
+        <div className="text-sm text-[#5F5E5A]">Sign in to see your account and booking history.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}>
