@@ -20,19 +20,15 @@ import { supabase } from "./supabaseClient.js";
 const DEMO_PICKUP = { lat: 53.3418, lng: -6.2603, address: "Grafton Street" };
 const DEMO_DROPOFF = { lat: 53.4264, lng: -6.2499, address: "Dublin Airport" };
 
-// A normal navigation menu now, not a leaked dev tool — earlier this
-// only rendered in local dev because jumping screens with no real
-// booking behind them showed FAKE data (mock "Sarah Kelly", a demo
-// stage switcher, etc.), which was actively misleading for a real
-// passenger. Every screen now has an honest empty state instead
-// ("No booking to show yet", "Sign in to see your account") — so
-// there's no broken/misleading state left to accidentally expose, and
-// this can just be a real menu again.
+// A normal navigation menu of genuine destinations — not every screen
+// belongs here. Fare estimate / Payment / Confirmed are wizard steps
+// that only make sense reached through the actual booking flow; jumping
+// to them directly always shows an empty placeholder ("No booking yet")
+// since there's no in-progress booking behind them, which is exactly
+// what looked like a broken/useless page. Only screens meaningful to
+// visit on their own are listed here.
 const SCREENS = [
   { id: "booking", label: "Book a ride" },
-  { id: "fare", label: "Fare estimate" },
-  { id: "payment", label: "Payment" },
-  { id: "confirmed", label: "Confirmed" },
   { id: "status", label: "Live tracking" },
   { id: "account", label: "Account" },
 ];
@@ -272,19 +268,38 @@ export default function App() {
   const [statusAlert, setStatusAlert] = useState(null); // { tone, title, message } | null
   const lastKnownStatusRef = useRef(null);
   const statusInitializedRef = useRef(false);
+  // screen and customerSession both change on nearly every render/
+  // navigation — if the polling effect depended on them directly, every
+  // navigation tore down and recreated the interval, so the real 10s
+  // timer rarely got a chance to actually elapse. That's what caused
+  // "only the first notification arrived and never any after it" — not
+  // every restart happened to catch a transition. Reading current
+  // values from refs at poll time instead means the interval is set up
+  // ONCE per real booking and ticks reliably regardless of navigation.
+  const screenRef = useRef(screen);
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
+  const customerSessionRef = useRef(customerSession);
+  useEffect(() => {
+    customerSessionRef.current = customerSession;
+  }, [customerSession]);
+
+  const trackedBookingId = bookingResult?.bookingId ?? activeGuestBooking?.bookingId;
+  const trackedGuestAccessToken = bookingResult?.accessToken ?? activeGuestBooking?.accessToken;
 
   useEffect(() => {
-    const trackedBookingId = bookingResult?.bookingId ?? activeGuestBooking?.bookingId;
     if (!trackedBookingId) {
       statusInitializedRef.current = false;
       return;
     }
 
-    const guestAccessToken = customerSession?.customer ? null : bookingResult?.accessToken ?? activeGuestBooking?.accessToken;
-    const customerSessionToken = customerSession?.accessToken || null;
-
     let cancelledEffect = false;
     async function poll() {
+      const cs = customerSessionRef.current;
+      const guestAccessToken = cs?.customer ? null : trackedGuestAccessToken;
+      const customerSessionToken = cs?.accessToken || null;
+
       const result = await getBookingStatus({ bookingId: trackedBookingId, guestAccessToken, customerSessionToken });
       if (cancelledEffect || result.error) return;
 
@@ -295,7 +310,7 @@ export default function App() {
       // Skip alerting on the very first read for this booking — that's
       // just establishing a baseline, not a transition the passenger
       // actually witnessed happen.
-      if (statusInitializedRef.current && newStatus !== previousStatus && screen !== "status") {
+      if (statusInitializedRef.current && newStatus !== previousStatus && screenRef.current !== "status") {
         const alertContent = STATUS_ALERTS[newStatus];
         if (alertContent) {
           setStatusAlert(
@@ -327,7 +342,7 @@ export default function App() {
       cancelledEffect = true;
       clearInterval(intervalId);
     };
-  }, [bookingResult?.bookingId, activeGuestBooking?.bookingId, customerSession, screen]);
+  }, [trackedBookingId, trackedGuestAccessToken]);
 
   // ---- Account history (signed-in customers only — see customerAuth.js:
   // an account is scoped to one driver, so there's no cross-driver
