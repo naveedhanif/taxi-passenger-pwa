@@ -37,7 +37,7 @@ const corsHeaders = {
 interface RequestBody {
   user_id: string;
   email: string;
-  name: string;
+  name?: string | null;
   phone?: string | null;
   driver_id: string;
 }
@@ -87,7 +87,20 @@ Deno.serve(async (req) => {
     }
 
     // ---- Idempotent: a retry (e.g. flaky network right after signup)
-    // shouldn't create a duplicate row or error out ----
+    // shouldn't create a duplicate row or error out. It's ALSO now used
+    // as a general "keep my profile current" upsert — see
+    // App.jsx's handleConfirmFare, which calls this with whatever the
+    // passenger actually typed into the booking form every time they
+    // book. That matters because a self-heal (customerAuth.js's
+    // ensureCustomerRecord, called after signing in with an account
+    // that got created without a real name/phone — e.g. from the
+    // earlier RLS-bug era) only ever has an email to work with, so it
+    // fills the row with an email-derived placeholder name and no
+    // phone. Without this repair step, that placeholder would be
+    // permanent. Only overwrites a field when the caller actually
+    // provided a real (truthy) value — a self-heal call that omits
+    // name/phone entirely never blanks out real data that's already
+    // there.
     const { data: existing } = await supabase
       .from("customers")
       .select("id, name, phone, email")
@@ -96,6 +109,14 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existing) {
+      const patch: Record<string, string> = {};
+      if (body.name && body.name !== existing.name) patch.name = body.name;
+      if (body.phone && body.phone !== existing.phone) patch.phone = body.phone;
+
+      if (Object.keys(patch).length > 0) {
+        await supabase.from("customers").update(patch).eq("id", existing.id);
+      }
+
       return new Response(
         JSON.stringify({ customerId: existing.id }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }

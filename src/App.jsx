@@ -9,6 +9,7 @@ import GuestAccountChoice from "./GuestAccountChoice.jsx";
 import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 import { createBooking } from "./bookingApi.js";
+import { getBookingStatus } from "./bookingStatusApi.js";
 import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./customerAuth.js";
 import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
@@ -19,30 +20,22 @@ import { supabase } from "./supabaseClient.js";
 const DEMO_PICKUP = { lat: 53.3418, lng: -6.2603, address: "Grafton Street" };
 const DEMO_DROPOFF = { lat: 53.4264, lng: -6.2499, address: "Dublin Airport" };
 
-// Only ever shown in `npm run dev` (import.meta.env.DEV), never in the
-// production build Vercel serves. This used to render unconditionally,
-// which let a real passenger manually jump to "3. Payment" or
-// "6. Live tracking" with no real booking behind it — that's what was
-// causing the stale "No booking yet" message and the fully-mocked
-// tracking screen to appear for real users, not just a UI bug on those
-// screens themselves.
+// A normal navigation menu now, not a leaked dev tool — earlier this
+// only rendered in local dev because jumping screens with no real
+// booking behind them showed FAKE data (mock "Sarah Kelly", a demo
+// stage switcher, etc.), which was actively misleading for a real
+// passenger. Every screen now has an honest empty state instead
+// ("No booking to show yet", "Sign in to see your account") — so
+// there's no broken/misleading state left to accidentally expose, and
+// this can just be a real menu again.
 const SCREENS = [
-  { id: "booking", label: "1. Booking form" },
-  { id: "fare", label: "2. Fare estimate" },
-  { id: "payment", label: "3. Payment" },
-  { id: "confirmed", label: "4. Confirmed" },
-  { id: "guest-choice", label: "5. Guest/account" },
-  { id: "auth", label: "5b. Sign up/in" },
-  { id: "status", label: "6. Live tracking" },
-  { id: "account", label: "7. Account/history" },
+  { id: "booking", label: "Book a ride" },
+  { id: "fare", label: "Fare estimate" },
+  { id: "payment", label: "Payment" },
+  { id: "confirmed", label: "Confirmed" },
+  { id: "status", label: "Live tracking" },
+  { id: "account", label: "Account" },
 ];
-// Shown either in local dev (npm run dev) OR when explicitly requested
-// via ?dev=1 on the deployed site — e.g.
-// taxi-passenger-pwa.vercel.app/johns-taxi?dev=1 — so testing every
-// screen on the real deployed build doesn't require running a local
-// dev server. Never appears for a real passenger's ordinary QR-code
-// link, since that link has no ?dev=1 on it.
-const DEV_NAV = import.meta.env.DEV || new URLSearchParams(window.location.search).get("dev") === "1";
 
 function guestBookingStorageKey(driverId) {
   return `taxi_guest_booking_${driverId}`;
@@ -244,6 +237,54 @@ export default function App() {
       }
     }
   }
+
+  // ---- Top-level cancellation watcher ----
+  // The live tracking screen (passenger-booking-status.jsx) already
+  // polls and shows cancellation clearly — but only while the passenger
+  // is actually looking at that screen. A driver cancelling while the
+  // passenger is sitting on the main booking screen (or anywhere else)
+  // previously produced no notification at all — nothing was watching
+  // from outside that one screen. This polls independently of `screen`
+  // and shows an immediate, hard-to-miss banner the moment it detects
+  // the change, wherever the passenger currently is.
+  const [cancellationAlert, setCancellationAlert] = useState(null); // { refunded: boolean } | null
+  const lastKnownStatusRef = useRef(null);
+
+  useEffect(() => {
+    const trackedBookingId = bookingResult?.bookingId ?? activeGuestBooking?.bookingId;
+    if (!trackedBookingId) return;
+
+    const guestAccessToken = customerSession?.customer ? null : bookingResult?.accessToken ?? activeGuestBooking?.accessToken;
+    const customerSessionToken = customerSession?.accessToken || null;
+
+    let cancelledEffect = false;
+    async function poll() {
+      const result = await getBookingStatus({ bookingId: trackedBookingId, guestAccessToken, customerSessionToken });
+      if (cancelledEffect || result.error) return;
+
+      const newStatus = result.booking.status;
+      const wasAlreadyKnownCanceled = lastKnownStatusRef.current === "canceled";
+      lastKnownStatusRef.current = newStatus;
+
+      if (newStatus === "canceled" && !wasAlreadyKnownCanceled && screen !== "status") {
+        setCancellationAlert({ refunded: result.booking.refunded });
+      }
+      if (["completed", "canceled"].includes(newStatus)) {
+        clearInterval(intervalId);
+      }
+    }
+
+    poll();
+    // Deliberately slower than the live tracking screen's own 8s poll
+    // — this is a background watcher, not the primary status display,
+    // so it doesn't need to be as snappy.
+    const intervalId = setInterval(poll, 15000);
+
+    return () => {
+      cancelledEffect = true;
+      clearInterval(intervalId);
+    };
+  }, [bookingResult?.bookingId, activeGuestBooking?.bookingId, customerSession, screen]);
 
   // ---- Account history (signed-in customers only — see customerAuth.js:
   // an account is scoped to one driver, so there's no cross-driver
@@ -467,6 +508,34 @@ export default function App() {
       // the only reliable way back to it after a refresh, since there's
       // no login to fall back on.
       persistGuestBooking(result.bookingId, result.accessToken);
+    } else if (formSelection?.passengerName || formSelection?.passengerPhone) {
+      // Fire-and-forget: repair the customer's saved profile with
+      // whatever real name/phone they just typed, in case it was
+      // stuck with a self-heal's email-derived placeholder. Doesn't
+      // block or fail the booking if this errors — the booking itself
+      // already succeeded above.
+      ensureCustomerRecord({
+        userId: customerSession.userId,
+        email: customerSession.customer.email,
+        name: formSelection.passengerName || null,
+        phone: formSelection.passengerPhone || null,
+        driverId,
+      }).then((r) => {
+        if (!r.error) {
+          setCustomerSession((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  customer: {
+                    ...prev.customer,
+                    name: formSelection.passengerName || prev.customer.name,
+                    phone: formSelection.passengerPhone || prev.customer.phone,
+                  },
+                }
+              : prev
+          );
+        }
+      });
     }
     go("payment");
   }
@@ -538,58 +607,85 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5]">
-      {DEV_NAV && (
-        <>
-          {/* Mobile: hamburger bar */}
-          <div className="sticky top-0 z-40 flex items-center justify-between border-b border-[#ECE9E0] bg-[#F7F7F5]/95 px-4 py-3 backdrop-blur-md sm:hidden">
-            <span className="text-sm font-semibold text-[#2C2C2A]">Dev nav: {currentLabel}</span>
+      {/* Mobile: hamburger bar */}
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-[#ECE9E0] bg-[#F7F7F5]/95 px-4 py-3 backdrop-blur-md sm:hidden">
+        <span className="text-sm font-semibold text-[#2C2C2A]">{currentLabel}</span>
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label="Toggle screen menu"
+          className="flex h-11 w-11 items-center justify-center rounded-lg"
+          style={{ background: "#F0EEE7", color: "#2C2C2A" }}
+        >
+          {menuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
+      </div>
+      {menuOpen && (
+        <div className="sticky top-[57px] z-30 flex flex-col gap-2 border-b border-[#ECE9E0] bg-[#F7F7F5] p-3 sm:hidden">
+          {SCREENS.map((s) => (
             <button
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Toggle screen menu"
-              className="flex h-11 w-11 items-center justify-center rounded-lg"
-              style={{ background: "#F0EEE7", color: "#2C2C2A" }}
+              key={s.id}
+              onClick={() => selectScreen(s.id)}
+              className="rounded-lg px-4 py-3.5 text-left text-sm font-medium"
+              style={{
+                background: screen === s.id ? "#185FA5" : "#F0EEE7",
+                color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
+              }}
             >
-              {menuOpen ? <X size={22} /> : <Menu size={22} />}
+              {s.label}
             </button>
-          </div>
-          {menuOpen && (
-            <div className="sticky top-[57px] z-30 flex flex-col gap-2 border-b border-[#ECE9E0] bg-[#F7F7F5] p-3 sm:hidden">
-              {SCREENS.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => selectScreen(s.id)}
-                  className="rounded-lg px-4 py-3.5 text-left text-sm font-medium"
-                  style={{
-                    background: screen === s.id ? "#185FA5" : "#F0EEE7",
-                    color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
-                  }}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Desktop / tablet: row of tabs */}
-          <div className="sticky top-0 z-40 hidden flex-wrap justify-center gap-2.5 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 p-4 backdrop-blur-md sm:flex">
-            {SCREENS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => go(s.id)}
-                className="rounded-lg px-4 py-2.5 text-sm font-medium"
-                style={{
-                  background: screen === s.id ? "#185FA5" : "#F0EEE7",
-                  color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </>
+          ))}
+        </div>
       )}
 
+      {/* Desktop / tablet: row of tabs */}
+      <div className="sticky top-0 z-40 hidden flex-wrap justify-center gap-2.5 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 p-4 backdrop-blur-md sm:flex">
+        {SCREENS.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => go(s.id)}
+            className="rounded-lg px-4 py-2.5 text-sm font-medium"
+            style={{
+              background: screen === s.id ? "#185FA5" : "#F0EEE7",
+              color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
+            }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       <div className="py-6">
+        {cancellationAlert && (
+          <div
+            className="mx-auto mb-4 flex w-full max-w-[400px] items-start gap-3 rounded-xl p-4 text-sm"
+            style={{ background: "#FCEBEB", color: "#791F1F", border: "1px solid #F3C6C6" }}
+          >
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold">Your booking was cancelled</div>
+              <div className="mt-0.5">
+                {cancellationAlert.refunded
+                  ? "Your refund is on the way — it can take a few days to appear on your statement."
+                  : "Contact your driver if you were expecting a refund."}
+              </div>
+              <div className="mt-2 flex gap-3">
+                <button
+                  onClick={() => {
+                    setCancellationAlert(null);
+                    go("status");
+                  }}
+                  className="text-xs font-semibold underline"
+                >
+                  View details
+                </button>
+                <button onClick={() => setCancellationAlert(null)} className="text-xs font-medium opacity-70">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {driverDataError && (
           <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
             <AlertCircle size={16} /> {driverDataError}
