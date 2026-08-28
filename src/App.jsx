@@ -13,6 +13,7 @@ import { getBookingStatus } from "./bookingStatusApi.js";
 import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./customerAuth.js";
 import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
+import { getDriverOnlineStatus } from "./driverAvailabilityApi.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -110,6 +111,11 @@ export default function App() {
   // form); create-booking re-checks this server-side regardless, since
   // this read can go stale between page-load and submit.
   const [isDriverAvailable, setIsDriverAvailable] = useState(true);
+  // Separate from the above: whether the driver has manually marked
+  // themselves as taking bookings today at all — a driver who's simply
+  // not working today is a different situation from one who's mid-trip
+  // right now, and deserves a different message.
+  const [isDriverOnline, setIsDriverOnline] = useState(true);
 
   // ---- Real customer session (signed-in passengers) ----
   // Resolved from Supabase Auth, not assumed. Used to (a) pass the real
@@ -266,6 +272,10 @@ export default function App() {
     canceled: { tone: "error", title: "Booking cancelled", message: null }, // message filled in from refund status below
   };
   const [statusAlert, setStatusAlert] = useState(null); // { tone, title, message } | null
+  // TEMPORARY — diagnostic only, see the debug badge near the bottom of
+  // this component's render. Tracks exactly what the last poll attempt
+  // did, so it can be screenshotted instead of guessed at.
+  const [pollDebug, setPollDebug] = useState(null);
   const lastKnownStatusRef = useRef(null);
   const statusInitializedRef = useRef(false);
   // screen and customerSession both change on nearly every render/
@@ -323,10 +333,32 @@ export default function App() {
       const customerSessionToken = cs?.accessToken || null;
 
       const result = await getBookingStatus({ bookingId: trackedBookingId, guestAccessToken, customerSessionToken });
-      if (cancelledEffect || result.error) return;
+
+      if (cancelledEffect) return;
+
+      if (result.error) {
+        setPollDebug({
+          time: new Date().toLocaleTimeString(),
+          bookingId: trackedBookingId,
+          authMode: cs?.customer ? "customer session" : "guest token",
+          hasGuestToken: Boolean(guestAccessToken),
+          hasCustomerToken: Boolean(customerSessionToken),
+          error: result.error,
+        });
+        return;
+      }
 
       const newStatus = result.booking.status;
       const previousStatus = lastKnownStatusRef.current;
+      setPollDebug({
+        time: new Date().toLocaleTimeString(),
+        bookingId: trackedBookingId,
+        authMode: cs?.customer ? "customer session" : "guest token",
+        status: newStatus,
+        previousStatus,
+        initialized: statusInitializedRef.current,
+        onStatusScreen: screenRef.current === "status",
+      });
       lastKnownStatusRef.current = newStatus;
       try {
         localStorage.setItem(storageKey, newStatus);
@@ -450,7 +482,7 @@ export default function App() {
     let cancelled = false;
 
     async function loadDriverData() {
-      const [vehicleRes, fareRulesRes, profileRes] = await Promise.all([
+      const [vehicleRes, fareRulesRes, profileRes, onlineStatus] = await Promise.all([
         supabase
           .from("public_vehicle_profiles")
           .select("make, model, color, seats")
@@ -466,10 +498,12 @@ export default function App() {
           .select("is_available, pay_later_deposit_amount, avg_rating, review_count, licence_verified, phone_number")
           .eq("id", driverId)
           .maybeSingle(),
+        getDriverOnlineStatus(driverId),
       ]);
 
       if (cancelled) return;
 
+      setIsDriverOnline(onlineStatus);
       if (!vehicleRes.error) setVehicle(vehicleRes.data);
       if (!fareRulesRes.error) setFareRules(fareRulesRes.data ?? []);
       if (!profileRes.error && profileRes.data) {
@@ -786,7 +820,13 @@ export default function App() {
           </div>
         )}
 
-        {!isDriverAvailable && !driverDataError && screen === "booking" && (
+        {!isDriverOnline && !driverDataError && screen === "booking" && (
+          <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#F1EFE8", color: "#2C2C2A" }}>
+            <AlertCircle size={16} /> {businessName || "This driver"} isn't taking bookings today — please check back another time.
+          </div>
+        )}
+
+        {isDriverOnline && !isDriverAvailable && !driverDataError && screen === "booking" && (
           <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FAEEDA", color: "#633806" }}>
             <AlertCircle size={16} /> This driver already has a booking in progress right now — check back
             shortly, or pick a later date/time below.
@@ -989,6 +1029,27 @@ export default function App() {
         >
           <HomeIcon size={13} /> Home
         </button>
+      )}
+
+      {/* TEMPORARY diagnostic badge — remove once the notification bug
+          is confirmed fixed. Shows exactly what the last poll attempt
+          did (success/failure, auth mode used, status comparison) so
+          it can be screenshotted instead of guessed at. */}
+      {pollDebug && (
+        <div
+          className="fixed top-2 left-2 right-2 z-50 rounded-lg p-2 text-[10px] font-mono leading-tight"
+          style={{ background: "#2C2C2A", color: "#F0EEE7" }}
+        >
+          {pollDebug.time} booking:{pollDebug.bookingId?.slice(0, 8)} auth:{pollDebug.authMode}
+          {pollDebug.error ? (
+            <> ERROR:{pollDebug.error}</>
+          ) : (
+            <>
+              {" "}
+              status:{pollDebug.status} prev:{String(pollDebug.previousStatus)} init:{String(pollDebug.initialized)} onStatusScreen:{String(pollDebug.onStatusScreen)}
+            </>
+          )}
+        </div>
       )}
 
       {/* Version badge — small, fixed, out of the way. Exists purely so
