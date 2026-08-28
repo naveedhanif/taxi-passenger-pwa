@@ -294,6 +294,28 @@ export default function App() {
       return;
     }
 
+    // Recover the last-seen status from a previous page load, if any —
+    // this is what lets a genuine transition still be detected even
+    // when the reload itself happens right at/after the moment it
+    // occurred. Without this, statusInitializedRef always started
+    // false on every fresh mount, so the very first poll after ANY
+    // reload silently adopted whatever status it found as the new
+    // baseline instead of recognizing it as a real change — losing
+    // the notification entirely if a reload happened to land after
+    // the driver's action but before the passenger had seen it.
+    const storageKey = `taxi_last_seen_status_${trackedBookingId}`;
+    try {
+      const persisted = localStorage.getItem(storageKey);
+      if (persisted) {
+        lastKnownStatusRef.current = persisted;
+        statusInitializedRef.current = true;
+      }
+    } catch {
+      // Ignore — falls back to the original "treat first poll as
+      // baseline" behavior, which is still correct for a genuinely
+      // first-ever check.
+    }
+
     let cancelledEffect = false;
     async function poll() {
       const cs = customerSessionRef.current;
@@ -306,6 +328,12 @@ export default function App() {
       const newStatus = result.booking.status;
       const previousStatus = lastKnownStatusRef.current;
       lastKnownStatusRef.current = newStatus;
+      try {
+        localStorage.setItem(storageKey, newStatus);
+      } catch {
+        // Ignore — this reload-recovery is a nice-to-have, not required
+        // for the current session's own polling to keep working.
+      }
 
       // Skip alerting on the very first read for this booking — that's
       // just establishing a baseline, not a transition the passenger
@@ -329,6 +357,11 @@ export default function App() {
 
       if (["completed", "canceled"].includes(newStatus)) {
         clearInterval(intervalId);
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {
+          // Ignore.
+        }
       }
     }
 
