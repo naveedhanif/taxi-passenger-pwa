@@ -337,8 +337,11 @@ export default function App() {
 
       // Skip alerting on the very first read for this booking — that's
       // just establishing a baseline, not a transition the passenger
-      // actually witnessed happen.
-      if (statusInitializedRef.current && newStatus !== previousStatus && screenRef.current !== "status") {
+      // actually witnessed happen. Deliberately NOT excluded based on
+      // which screen is currently showing — a quiet inline update on
+      // the live tracking screen isn't a real notification on its own;
+      // the banner fires everywhere, including there.
+      if (statusInitializedRef.current && newStatus !== previousStatus) {
         const alertContent = STATUS_ALERTS[newStatus];
         if (alertContent) {
           setStatusAlert(
