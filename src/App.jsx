@@ -272,6 +272,12 @@ export default function App() {
     canceled: { tone: "error", title: "Booking cancelled", message: null }, // message filled in from refund status below
   };
   const [statusAlert, setStatusAlert] = useState(null); // { tone, title, message } | null
+  // Passengers previously only got a silent visual banner — no sound at
+  // all, unlike the driver side. This is the same idea: a short,
+  // gentle chime (distinct from the driver's urgent alert tone, since
+  // this is informational rather than action-required) plus a light
+  // vibration on mobile.
+  const statusAudioRef = useRef(null);
   // TEMPORARY — diagnostic only, see the debug badge near the bottom of
   // this component's render. Tracks exactly what the last poll attempt
   // did, so it can be screenshotted instead of guessed at.
@@ -294,6 +300,33 @@ export default function App() {
   useEffect(() => {
     customerSessionRef.current = customerSession;
   }, [customerSession]);
+
+  // Unlocks audio playback for mobile browsers — same fix as the driver
+  // app. Most mobile browsers (iOS Safari especially) block .play()
+  // calls that don't trace back to a genuine user tap; a status change
+  // arriving via poll/Realtime doesn't count as one. Priming the
+  // element with a real play()+immediate pause() inside the very first
+  // tap anywhere on the page satisfies that once, after which
+  // programmatic play() calls succeed for the rest of the session.
+  useEffect(() => {
+    function unlockAudio() {
+      const audio = statusAudioRef.current;
+      if (audio) {
+        audio
+          .play()
+          .then(() => audio.pause())
+          .catch(() => {
+            // Will simply try again on the next tap.
+          });
+      }
+    }
+    document.addEventListener("click", unlockAudio, { once: true });
+    document.addEventListener("touchstart", unlockAudio, { once: true });
+    return () => {
+      document.removeEventListener("click", unlockAudio);
+      document.removeEventListener("touchstart", unlockAudio);
+    };
+  }, []);
 
   const trackedBookingId = bookingResult?.bookingId ?? activeGuestBooking?.bookingId;
   const trackedGuestAccessToken = bookingResult?.accessToken ?? activeGuestBooking?.accessToken;
@@ -389,6 +422,18 @@ export default function App() {
                 }
               : alertContent
           );
+          statusAudioRef.current?.play().catch(() => {
+            // Blocked until the passenger has interacted with the page
+            // at least once — see the unlock effect below, which
+            // primes this the same way the driver app does.
+          });
+          if ("vibrate" in navigator) {
+            try {
+              navigator.vibrate(80);
+            } catch {
+              // Not supported on this device/browser — ignore.
+            }
+          }
         }
       }
       statusInitializedRef.current = true;
@@ -813,6 +858,7 @@ export default function App() {
       </div>
 
       <div className="py-6">
+        <audio ref={statusAudioRef} src="/status-update-chime.wav" preload="auto" />
         {statusAlert && (
           <div
             className="mx-auto mb-4 flex w-full max-w-[400px] items-start gap-3 rounded-xl p-4 text-sm"
