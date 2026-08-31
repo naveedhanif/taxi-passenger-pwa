@@ -329,7 +329,10 @@ export default function App() {
     let cancelledEffect = false;
     async function poll() {
       const cs = customerSessionRef.current;
-      const guestAccessToken = cs?.customer ? null : trackedGuestAccessToken;
+      // Same reasoning as the BookingStatus prop below — never null this
+      // out just because the passenger happens to be signed in right
+      // now. See that comment for the full explanation.
+      const guestAccessToken = trackedGuestAccessToken ?? null;
       const customerSessionToken = cs?.accessToken || null;
 
       const result = await getBookingStatus({ bookingId: trackedBookingId, guestAccessToken, customerSessionToken });
@@ -970,7 +973,15 @@ export default function App() {
         {screen === "status" && (
           <BookingStatus
             bookingId={bookingResult?.bookingId ?? activeGuestBooking?.bookingId}
-            guestAccessToken={customerSession?.customer ? null : bookingResult?.accessToken ?? activeGuestBooking?.accessToken}
+            // Send whichever guest token we actually have, regardless of
+            // whether the passenger happens to be signed in right now —
+            // a booking made as a guest and then followed by signing in
+            // afterward has NO customer_id link to it at all, so the
+            // guest token is still the only valid proof of ownership.
+            // get-booking-status already tries the guest token first and
+            // falls back to the customer session independently, so
+            // sending both whenever available is always safe.
+            guestAccessToken={bookingResult?.accessToken ?? activeGuestBooking?.accessToken ?? null}
             customerSessionToken={customerSession?.accessToken || null}
             onBack={goBack}
             onBookAgain={() => {
