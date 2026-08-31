@@ -314,7 +314,10 @@ export default function App() {
       if (audio) {
         audio
           .play()
-          .then(() => audio.pause())
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          })
           .catch(() => {
             // Will simply try again on the next tap.
           });
@@ -422,11 +425,23 @@ export default function App() {
                 }
               : alertContent
           );
-          statusAudioRef.current?.play().catch(() => {
-            // Blocked until the passenger has interacted with the page
-            // at least once — see the unlock effect below, which
-            // primes this the same way the driver app does.
-          });
+          // Reset playback position before every play() call. Without
+          // this, calling .play() on an <audio> element that's already
+          // finished playing is a silent no-op in many browsers — there's
+          // nothing left to play from the end position. This is exactly
+          // why only the very first notification's sound worked: the
+          // banner logic above fires correctly on every real transition,
+          // but every play() after the first one was hitting an element
+          // still sitting at its own end, not actually restarting.
+          const audio = statusAudioRef.current;
+          if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {
+              // Blocked until the passenger has interacted with the page
+              // at least once — see the unlock effect below, which
+              // primes this the same way the driver app does.
+            });
+          }
           if ("vibrate" in navigator) {
             try {
               navigator.vibrate(80);
