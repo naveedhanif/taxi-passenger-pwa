@@ -14,6 +14,7 @@ import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./c
 import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
 import { getDriverOnlineStatus } from "./driverAvailabilityApi.js";
+import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./savedLocationsApi.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -530,6 +531,37 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
+  // ---- Saved locations (Home/Work etc, signed-in customers only) ----
+  // AccountHistoryScreen already had the UI for this; App.jsx just
+  // never fed it real data before now. Loaded whenever a signed-in
+  // customer resolves — not just when the account screen opens — so
+  // the booking form's quick-select chips have data ready too.
+  const [savedLocations, setSavedLocations] = useState([]);
+
+  async function loadSavedLocations() {
+    if (!customerSession?.accessToken || !driverId) return;
+    const result = await listSavedLocations({ driverId, customerSessionToken: customerSession.accessToken });
+    if (!result.error) setSavedLocations(result.locations || []);
+  }
+
+  useEffect(() => {
+    if (customerSession?.customer) loadSavedLocations();
+    else setSavedLocations([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerSession?.customer, driverId]);
+
+  async function handleSaveLocation({ label, address, lat, lng }) {
+    if (!customerSession?.accessToken || !driverId) return;
+    const result = await addSavedLocation({ driverId, customerSessionToken: customerSession.accessToken, label, address, lat, lng });
+    if (!result.error) loadSavedLocations();
+  }
+
+  async function handleDeleteLocation(locationId) {
+    if (!customerSession?.accessToken || !driverId) return;
+    const result = await deleteSavedLocation({ driverId, customerSessionToken: customerSession.accessToken, locationId });
+    if (!result.error) setSavedLocations((prev) => prev.filter((l) => l.id !== locationId));
+  }
+
   // Step 1: resolve the URL path (e.g. /johns-taxi) to a real driver id
   // via booking_slug. This is what makes one deployed app work for every
   // driver — the slug in the URL decides who the passenger is booking.
@@ -951,6 +983,8 @@ export default function App() {
                 authOriginRef.current = "account";
                 go(customerSession?.customer ? "account" : "auth");
               }}
+              savedLocations={savedLocations}
+              onSaveLocation={customerSession?.customer ? handleSaveLocation : undefined}
             />
           </>
         )}
@@ -1088,10 +1122,36 @@ export default function App() {
               <AccountHistoryScreen
                 customer={customerSession?.customer || null}
                 bookings={accountBookings}
-                savedLocations={[]}
+                savedLocations={savedLocations}
+                onDeleteLocation={handleDeleteLocation}
                 onSelectBooking={(booking) => {
                   setBookingResult({ bookingId: booking.id, accessToken: null, paymentTiming: null, fare: null });
                   go("status");
+                }}
+                onBookAgain={(booking) => {
+                  // Pre-fills the form with everything except date/time —
+                  // a passenger rebooking a past trip almost certainly
+                  // wants a NEW time, not the exact original moment, so
+                  // that's deliberately left for them to set fresh.
+                  setBookingDraft((prev) => ({
+                    ...prev,
+                    passengerName: booking.passenger_name || prev.passengerName,
+                    passengerPhone: booking.passenger_phone || prev.passengerPhone,
+                    passengerEmail: booking.passenger_email || prev.passengerEmail,
+                    pickup: booking.pickup_address || "",
+                    dropoff: booking.dropoff_address || "",
+                    pickupCoords:
+                      booking.pickup_lat != null
+                        ? { lat: booking.pickup_lat, lng: booking.pickup_lng, fullAddress: booking.pickup_address }
+                        : null,
+                    dropoffCoords:
+                      booking.dropoff_lat != null
+                        ? { lat: booking.dropoff_lat, lng: booking.dropoff_lng, fullAddress: booking.dropoff_address }
+                        : null,
+                    date: "",
+                    time: "",
+                  }));
+                  go("booking");
                 }}
                 onSignOut={handleSignOut}
                 onBack={goBack}

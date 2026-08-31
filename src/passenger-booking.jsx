@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
 import { formatPhoneForLinks } from "./phoneLinks.js";
@@ -96,6 +96,8 @@ export default function PassengerBooking({
   driverId,
   driverPhoneNumber,
   onOpenAccount,
+  savedLocations = [],
+  onSaveLocation,
 }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
@@ -485,6 +487,34 @@ export default function PassengerBooking({
             value={passengerEmail}
             onChange={(e) => setPassengerEmail(e.target.value)}
           />
+          {savedLocations.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {savedLocations.map((loc) => (
+                <button
+                  key={loc.id}
+                  type="button"
+                  onClick={() => {
+                    // Fills whichever field is currently empty first —
+                    // usually pickup, since that's typically where a
+                    // trip from a saved place (Home/Work) starts.
+                    const target = !pickup ? "pickup" : !dropoff ? "dropoff" : "pickup";
+                    const coordsPayload = { lat: loc.lat, lng: loc.lng, fullAddress: loc.address };
+                    if (target === "pickup") {
+                      setPickup(loc.address);
+                      setPickupCoords(loc.lat != null ? coordsPayload : null);
+                    } else {
+                      setDropoff(loc.address);
+                      setDropoffCoords(loc.lat != null ? coordsPayload : null);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+                  style={{ background: "#E4E2DA", color: "#2C2C2A" }}
+                >
+                  <MapPin size={11} /> {loc.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="relative">
             <EmbossField
               icon={MapPin}
@@ -496,15 +526,31 @@ export default function PassengerBooking({
                 setPickupCoords(null);
               }}
               trailing={
-                <button
-                  type="button"
-                  onClick={useCurrentLocation}
-                  className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
-                  style={{ background: "#E4E2DA", color: "#185FA5" }}
-                >
-                  {locating ? <Loader2 size={12} className="animate-spin" /> : <LocateFixed size={12} />}
-                  {locating ? "Locating…" : "Use current"}
-                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {onSaveLocation && pickupCoords && pickupCoords.fullAddress === pickup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const label = window.prompt("Save this pickup as (e.g. Home, Work):");
+                        if (label) onSaveLocation({ label, address: pickup, lat: pickupCoords.lat, lng: pickupCoords.lng });
+                      }}
+                      title="Save this address"
+                      className="flex items-center justify-center rounded-full p-1.5"
+                      style={{ background: "#E4E2DA", color: "#185FA5" }}
+                    >
+                      <BookmarkPlus size={12} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={useCurrentLocation}
+                    className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    style={{ background: "#E4E2DA", color: "#185FA5" }}
+                  >
+                    {locating ? <Loader2 size={12} className="animate-spin" /> : <LocateFixed size={12} />}
+                    {locating ? "Locating…" : "Use current"}
+                  </button>
+                </div>
               }
             />
             {pickupSuggestions.length > 0 && (
@@ -536,6 +582,22 @@ export default function PassengerBooking({
                 setDropoff(e.target.value);
                 setDropoffCoords(null);
               }}
+              trailing={
+                onSaveLocation && dropoffCoords && dropoffCoords.fullAddress === dropoff ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const label = window.prompt("Save this drop-off as (e.g. Home, Work):");
+                      if (label) onSaveLocation({ label, address: dropoff, lat: dropoffCoords.lat, lng: dropoffCoords.lng });
+                    }}
+                    title="Save this address"
+                    className="flex shrink-0 items-center justify-center rounded-full p-1.5"
+                    style={{ background: "#E4E2DA", color: "#185FA5" }}
+                  >
+                    <BookmarkPlus size={12} />
+                  </button>
+                ) : null
+              }
             />
             {dropoffSuggestions.length > 0 && (
               <div

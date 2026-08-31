@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, X, Loader2, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, X, Loader2, AlertCircle, Star, HeartHandshake } from "lucide-react";
 import { getBookingStatus, cancelBooking } from "./bookingStatusApi.js";
+import { submitReview } from "./reviewApi.js";
+import { createTipPayment } from "./tipApi.js";
+import TipPaymentForm from "./TipPaymentForm.jsx";
 import { formatPhoneForLinks } from "./phoneLinks.js";
 import { supabase } from "./supabaseClient.js";
 
@@ -171,6 +174,39 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
   const pollRef = useRef(null);
+  // Whether this exact booking already got a rating submitted — checked
+  // against localStorage so a reload after rating doesn't re-show the
+  // prompt (the server also independently rejects a duplicate review,
+  // this is purely so the UI doesn't ask twice).
+  const [hasRated, setHasRated] = useState(() => {
+    try {
+      return localStorage.getItem(`taxi_reviewed_${bookingId}`) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingHover, setRatingHover] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingError, setRatingError] = useState("");
+  // Tipping — separate from rating, a passenger can tip without rating
+  // or vice versa. tipAmountPaid tracks the actual confirmed amount
+  // (not just "did they tip"), persisted so a reload doesn't re-show
+  // the prompt after a tip already went through.
+  const [tipAmountPaid, setTipAmountPaid] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`taxi_tip_${bookingId}`);
+      return saved ? Number(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [tipChoice, setTipChoice] = useState(null); // number | "custom" | "skip" | null
+  const [customTipInput, setCustomTipInput] = useState("");
+  const [tipClientSecret, setTipClientSecret] = useState(null);
+  const [creatingTipIntent, setCreatingTipIntent] = useState(false);
+  const [tipSetupError, setTipSetupError] = useState("");
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -226,6 +262,52 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
       );
     }
     load();
+  }
+
+  async function handleSubmitRating() {
+    if (ratingValue < 1) return;
+    setSubmittingRating(true);
+    setRatingError("");
+    const result = await submitReview({
+      bookingId,
+      guestAccessToken,
+      customerSessionToken,
+      rating: ratingValue,
+      comment: ratingComment,
+    });
+    setSubmittingRating(false);
+    if (result.error) {
+      setRatingError(result.error);
+      return;
+    }
+    setHasRated(true);
+    try {
+      localStorage.setItem(`taxi_reviewed_${bookingId}`, "1");
+    } catch {
+      // Ignore — worst case the prompt could reappear on a future
+      // reload, and the server will just reject the duplicate cleanly.
+    }
+  }
+
+  async function handleChooseTipAmount(amount) {
+    setTipSetupError("");
+    setCreatingTipIntent(true);
+    const result = await createTipPayment({ bookingId, guestAccessToken, customerSessionToken, amount });
+    setCreatingTipIntent(false);
+    if (result.error) {
+      setTipSetupError(result.error);
+      return;
+    }
+    setTipClientSecret(result.clientSecret);
+  }
+
+  function handleTipSuccess(amount) {
+    setTipAmountPaid(amount);
+    try {
+      localStorage.setItem(`taxi_tip_${bookingId}`, String(amount));
+    } catch {
+      // Ignore.
+    }
   }
 
   if (!bookingId) {
@@ -434,6 +516,150 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           </div>
         )}
       </EmbossCard>
+
+      {isDone && !hasRated && (
+        <EmbossCard className="mb-4 p-5">
+          <div className="mb-3 text-center text-sm font-semibold text-[#2C2C2A]">
+            How was your trip with {driver.businessName || "your driver"}?
+          </div>
+          <div className="mb-3 flex justify-center gap-1.5">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                onClick={() => setRatingValue(n)}
+                onMouseEnter={() => setRatingHover(n)}
+                onMouseLeave={() => setRatingHover(0)}
+                aria-label={`${n} star${n === 1 ? "" : "s"}`}
+              >
+                <Star
+                  size={30}
+                  fill={(ratingHover || ratingValue) >= n ? "#F5B300" : "none"}
+                  color={(ratingHover || ratingValue) >= n ? "#F5B300" : "#D3D1C7"}
+                  strokeWidth={1.5}
+                />
+              </button>
+            ))}
+          </div>
+          {ratingValue > 0 && (
+            <>
+              <textarea
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+                placeholder="Add a comment (optional)"
+                rows={2}
+                className="mb-3 w-full rounded-lg p-3 text-sm text-[#2C2C2A] placeholder:text-[#B4B2A9]"
+                style={{ background: "#F1EFE8", border: "1px solid #ECE9E0" }}
+              />
+              {ratingError && (
+                <div className="mb-3 flex items-center gap-1.5 rounded-lg p-2 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                  <AlertCircle size={12} /> {ratingError}
+                </div>
+              )}
+              <button
+                onClick={handleSubmitRating}
+                disabled={submittingRating}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+              >
+                {submittingRating ? <Loader2 size={15} className="animate-spin" /> : null}
+                {submittingRating ? "Submitting…" : "Submit rating"}
+              </button>
+            </>
+          )}
+        </EmbossCard>
+      )}
+
+      {isDone && hasRated && (
+        <div className="mb-4 flex items-center justify-center gap-1.5 rounded-xl p-3 text-sm font-medium" style={{ background: "#EAF3DE", color: "#27500A" }}>
+          <CheckCircle2 size={15} /> Thanks for your rating!
+        </div>
+      )}
+
+      {isDone && tipAmountPaid == null && tipChoice !== "skip" && (
+        <EmbossCard className="mb-4 p-5">
+          <div className="mb-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-[#2C2C2A]">
+            <HeartHandshake size={16} color="#378ADD" /> Add a tip?
+          </div>
+          <div className="mb-3 text-center text-xs text-[#8C8977]">100% goes directly to your driver.</div>
+
+          {!tipClientSecret ? (
+            <>
+              <div className="mb-3 grid grid-cols-4 gap-2">
+                {[2, 5, 10].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => {
+                      setTipChoice(n);
+                      handleChooseTipAmount(n);
+                    }}
+                    disabled={creatingTipIntent}
+                    className="rounded-lg py-2.5 text-sm font-semibold text-[#2C2C2A] disabled:opacity-60"
+                    style={{ background: tipChoice === n ? "#E1F0FF" : "#F1EFE8" }}
+                  >
+                    €{n}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setTipChoice("custom")}
+                  disabled={creatingTipIntent}
+                  className="rounded-lg py-2.5 text-xs font-semibold text-[#2C2C2A] disabled:opacity-60"
+                  style={{ background: tipChoice === "custom" ? "#E1F0FF" : "#F1EFE8" }}
+                >
+                  Other
+                </button>
+              </div>
+              {tipChoice === "custom" && (
+                <div className="mb-3 flex gap-2">
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={customTipInput}
+                    onChange={(e) => setCustomTipInput(e.target.value)}
+                    placeholder="Amount in €"
+                    className="flex-1 rounded-lg px-3 py-2.5 text-sm text-[#2C2C2A]"
+                    style={{ background: "#F1EFE8", border: "1px solid #ECE9E0" }}
+                  />
+                  <button
+                    onClick={() => handleChooseTipAmount(Number(customTipInput))}
+                    disabled={!customTipInput || Number(customTipInput) <= 0 || creatingTipIntent}
+                    className="rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+                  >
+                    Go
+                  </button>
+                </div>
+              )}
+              {creatingTipIntent && (
+                <div className="mb-2 flex items-center justify-center gap-1.5 text-xs text-[#5F5E5A]">
+                  <Loader2 size={12} className="animate-spin" /> Setting up…
+                </div>
+              )}
+              {tipSetupError && (
+                <div className="mb-2 flex items-center gap-1.5 rounded-lg p-2 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                  <AlertCircle size={12} /> {tipSetupError}
+                </div>
+              )}
+              <button onClick={() => setTipChoice("skip")} className="block w-full text-center text-xs text-[#B4B2A9] underline">
+                No thanks
+              </button>
+            </>
+          ) : (
+            <TipPaymentForm
+              stripePublishableKey={import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY}
+              clientSecret={tipClientSecret}
+              bookingId={bookingId}
+              onSuccess={handleTipSuccess}
+            />
+          )}
+        </EmbossCard>
+      )}
+
+      {isDone && tipAmountPaid != null && (
+        <div className="mb-4 flex items-center justify-center gap-1.5 rounded-xl p-3 text-sm font-medium" style={{ background: "#EAF3DE", color: "#27500A" }}>
+          <HeartHandshake size={15} /> €{tipAmountPaid.toFixed(2)} tip sent — thank you!
+        </div>
+      )}
 
       {isDone ? (
         <button
