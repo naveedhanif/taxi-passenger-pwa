@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, X, Loader2, AlertCircle } from "lucide-react";
 import { getBookingStatus, cancelBooking } from "./bookingStatusApi.js";
 import { formatPhoneForLinks } from "./phoneLinks.js";
+import { supabase } from "./supabaseClient.js";
 
 // Requires: npm install mapbox-gl
 // Requires: a Mapbox access token in your .env as VITE_MAPBOX_TOKEN
@@ -185,9 +186,27 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
 
   useEffect(() => {
     load();
+    // Kept running even with Realtime below, as a fallback — same
+    // reasoning as the top-level watcher in App.jsx.
     pollRef.current = setInterval(load, POLL_INTERVAL_MS);
-    return () => clearInterval(pollRef.current);
-  }, [load]);
+
+    let channel;
+    if (bookingId) {
+      channel = supabase
+        .channel(`booking-status-detail-${bookingId}`)
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "bookings", filter: `id=eq.${bookingId}` },
+          () => load()
+        )
+        .subscribe();
+    }
+
+    return () => {
+      clearInterval(pollRef.current);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [load, bookingId]);
 
   async function handleCancel() {
     if (!window.confirm("Cancel this booking? This can't be undone.")) return;

@@ -403,12 +403,39 @@ export default function App() {
     poll();
     // Deliberately a bit slower than the live tracking screen's own 8s
     // poll — this is a background watcher, not the primary status
-    // display, but still fast enough to feel close to real-time.
+    // display, but still fast enough to feel close to real-time. Kept
+    // running even with Realtime below as a fallback: if the
+    // subscription silently receives nothing (e.g. an RLS policy that
+    // doesn't cover a particular guest path), this is what still
+    // delivers the update, just with up to 10s of latency instead of
+    // near-instant.
     const intervalId = setInterval(poll, 10000);
+
+    // Realtime: the fast path. The moment Postgres reports a change to
+    // this exact booking row, poll immediately instead of waiting for
+    // the next scheduled tick — this is what closes the biggest real
+    // gap versus Uber/Bolt, which push status changes instantly rather
+    // than on a delay. Deliberately reuses poll() (the same authorized
+    // get-booking-status call) instead of trying to reconstruct the
+    // full alert-ready response from the raw postgres_changes payload
+    // — that payload doesn't include the driver/vehicle/refund info
+    // the banner needs anyway, and reusing one code path means there's
+    // only one place auth/shaping logic can go wrong.
+    const channel = supabase
+      .channel(`booking-status-${trackedBookingId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "bookings", filter: `id=eq.${trackedBookingId}` },
+        () => {
+          poll();
+        }
+      )
+      .subscribe();
 
     return () => {
       cancelledEffect = true;
       clearInterval(intervalId);
+      supabase.removeChannel(channel);
     };
   }, [trackedBookingId, trackedGuestAccessToken]);
 
