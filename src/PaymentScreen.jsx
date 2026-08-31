@@ -109,15 +109,39 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
         });
         const data = await res.json();
         if (!res.ok || !data.confirmed) {
-          // Surface the real reason instead of a generic message — this
-          // was previously discarded, which made "payment succeeded but
-          // booking wasn't confirmed" failures completely undiagnosable
-          // from the outside. See confirm-booking-payment/index.ts for
-          // what these mean: a 4xx/5xx means the function itself
-          // errored; confirmed:false with a stripeStatus means Stripe's
-          // OWN records say the PaymentIntent didn't reach "succeeded"
-          // (e.g. still "requires_action" for a card needing 3D Secure).
-          const detail = data?.error || (data?.stripeStatus ? `Stripe status: ${data.stripeStatus}` : `HTTP ${res.status}`);
+          const status = data?.stripeStatus;
+
+          if (status === "requires_payment_method" || status === "canceled") {
+            // Unambiguous failure — Stripe itself is saying no charge
+            // occurred (the card was declined, or the attempt otherwise
+            // failed before any money moved). The previous "may have
+            // gone through, contact support" wording was actively
+            // wrong for this case and sent passengers into an
+            // unnecessary dead end for something they can just retry
+            // immediately with the same or a different card, reusing
+            // the same PaymentIntent.
+            setErrorMessage("Your payment didn't go through — no charge was made. Please check your card details and try again.");
+            setSubmitting(false);
+            return;
+          }
+
+          if (status === "requires_action") {
+            // Normally handled in-browser by confirmPayment's own
+            // redirect/3D-Secure prompt — reaching here means that
+            // extra verification step didn't complete. Also a safe,
+            // clear retry, not a support case.
+            setErrorMessage("Your bank needs extra verification to approve this payment. Please try again.");
+            setSubmitting(false);
+            return;
+          }
+
+          // Genuinely ambiguous cases only (e.g. "processing" — some
+          // payment methods settle asynchronously and may still
+          // complete after the fact) — this is the one situation where
+          // "contact support" is actually the right guidance, since we
+          // can't tell the passenger with confidence whether money
+          // moved or not.
+          const detail = data?.error || (status ? `Stripe status: ${status}` : `HTTP ${res.status}`);
           setErrorMessage(
             `Your payment may have gone through, but we couldn't confirm your booking (${detail}). Please contact support with your booking reference: ${bookingId}`
           );
