@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle } from "lucide-react";
+import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw } from "lucide-react";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -37,29 +37,40 @@ const STATUS_LABEL = {
   canceled: { label: "Canceled", bg: "#FCEBEB", text: "#791F1F" },
 };
 
-function BookingRow({ booking, onSelect }) {
+function BookingRow({ booking, onSelect, onBookAgain, isPast }) {
   const s = STATUS_LABEL[booking.status] || STATUS_LABEL.pending;
   const dateLabel = new Date(booking.scheduled_time).toLocaleDateString(undefined, {
     day: "numeric", month: "short", year: "numeric",
   });
   return (
-    <button
-      onClick={() => onSelect(booking)}
-      className="flex w-full items-center justify-between rounded-lg border border-[#ECE9E0] px-3.5 py-3 text-left"
-    >
-      <div>
-        <div className="text-sm text-[#2C2C2A]">{booking.pickup_address} → {booking.dropoff_address}</div>
-        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#8C8977]">
-          <Clock size={10} /> {dateLabel}
+    <div className="rounded-lg border border-[#ECE9E0] px-3.5 py-3">
+      <button onClick={() => onSelect(booking)} className="flex w-full items-center justify-between text-left">
+        <div>
+          <div className="text-sm text-[#2C2C2A]">{booking.pickup_address} → {booking.dropoff_address}</div>
+          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#8C8977]">
+            <Clock size={10} /> {dateLabel}
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: s.bg, color: s.text }}>
-          {s.label}
-        </span>
-        <ChevronRight size={14} color="#B4B2A9" />
-      </div>
-    </button>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: s.bg, color: s.text }}>
+            {s.label}
+          </span>
+          <ChevronRight size={14} color="#B4B2A9" />
+        </div>
+      </button>
+      {isPast && onBookAgain && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onBookAgain(booking);
+          }}
+          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+        >
+          <RotateCw size={12} /> Book again
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -69,6 +80,7 @@ function BookingRow({ booking, onSelect }) {
  * @param {Array} props.bookings
  * @param {Array} [props.savedLocations] - [{id, label, address}]
  * @param {function} props.onSelectBooking
+ * @param {function} [props.onBookAgain] - pre-fills a fresh booking with a past trip's details
  * @param {function} [props.onDeleteLocation]
  * @param {function} props.onSignOut
  * @param {function} [props.onUpdateProfile] - (name, phone) => Promise<{error?: string}>; the real, direct way to fix a wrong name/phone, instead of relying on it getting picked up from a future booking form
@@ -78,6 +90,7 @@ export default function AccountHistoryScreen({
   bookings = [],
   savedLocations = [],
   onSelectBooking = () => {},
+  onBookAgain,
   onDeleteLocation = () => {},
   onSignOut = () => {},
   onBack = () => {},
@@ -290,7 +303,9 @@ export default function AccountHistoryScreen({
             {tab === "upcoming" ? "No upcoming trips" : "No past trips yet"}
           </div>
         ) : (
-          visibleBookings.map((b) => <BookingRow key={b.id} booking={b} onSelect={onSelectBooking} />)
+          visibleBookings.map((b) => (
+            <BookingRow key={b.id} booking={b} onSelect={onSelectBooking} onBookAgain={onBookAgain} isPast={tab === "past"} />
+          ))
         )}
       </div>
 

@@ -8,6 +8,7 @@ import { createTipPayment } from "./tipApi.js";
 import TipPaymentForm from "./TipPaymentForm.jsx";
 import { formatPhoneForLinks } from "./phoneLinks.js";
 import { supabase } from "./supabaseClient.js";
+import ChatPanel from "./ChatPanel.jsx";
 
 // Requires: npm install mapbox-gl
 // Requires: a Mapbox access token in your .env as VITE_MAPBOX_TOKEN
@@ -476,6 +477,16 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
             </div>
           )}
         </EmbossCard>
+      )}
+
+      {/* In-app chat — an addition to call/WhatsApp above, not a
+          replacement. Only shown while the trip is still active (not
+          done/cancelled), matching what actually needs live back-and-
+          forth communication. */}
+      {!isDone && !isCanceled && (
+        <div className="mb-4">
+          <ChatPanel bookingId={bookingId} guestAccessToken={guestAccessToken} customerSessionToken={customerSessionToken} selfRole="passenger" />
+        </div>
       )}
 
       {/* Trip details */}

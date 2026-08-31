@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
     const { data: bookings, error: bookingsError } = await supabase
       .from("bookings")
-      .select("id, status, scheduled_time, pickup_address, dropoff_address, estimated_fare, final_fare")
+      .select("id, status, scheduled_time, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, estimated_fare, final_fare, passenger_name, passenger_phone, passenger_email")
       // awaiting_payment bookings are unpaid/abandoned attempts — not a
       // real booking, shouldn't clutter the passenger's own history
       // either, same exclusion used everywhere else in the platform.
