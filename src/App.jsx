@@ -714,7 +714,7 @@ export default function App() {
     };
   }, [driverId]);
 
-  async function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, date, time }) {
+  async function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, date, time }) {
     // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
     // booking form resolves them via Mapbox before calling onSubmit.
     const scheduledTime = new Date(`${date}T${time}`);
@@ -743,7 +743,7 @@ export default function App() {
       return;
     }
 
-    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, scheduledTime });
+    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops: stops || [], scheduledTime });
     go("fare");
   }
 
@@ -765,6 +765,7 @@ export default function App() {
       passengerEmail: formSelection?.passengerEmail || null,
       pickup: formSelection?.pickup ?? DEMO_PICKUP,
       dropoff: formSelection?.dropoff ?? DEMO_DROPOFF,
+      stops: formSelection?.stops ?? [],
       scheduledTime: formSelection?.scheduledTime ?? new Date(),
       paymentTiming: paymentTiming || "now",
       // A signed-in customer's real session token — not always null.
@@ -1041,6 +1042,7 @@ export default function App() {
             mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
             pickup={formSelection?.pickup ?? DEMO_PICKUP}
             dropoff={formSelection?.dropoff ?? DEMO_DROPOFF}
+            stops={formSelection?.stops ?? []}
             scheduledTime={formSelection?.scheduledTime ?? new Date()}
             fareRules={fareRules}
             preBookingFee={3.0}

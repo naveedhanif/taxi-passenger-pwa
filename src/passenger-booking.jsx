@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus, X, Plus } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
 import { formatPhoneForLinks } from "./phoneLinks.js";
@@ -82,6 +82,78 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
   );
 }
 
+/** One intermediate stop's address field — manages its own transient
+ * search-suggestion state exactly like pickup/dropoff do, just scoped
+ * to this one stop instead of lifted into the shared draft (suggestion
+ * lists don't need to survive a screen change, same reasoning as the
+ * pickup/dropoff suggestion state above). */
+function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [session, setSession] = useState(() => createSearchSessionToken());
+
+  useEffect(() => {
+    if (!mapboxToken || stop.address.trim().length < 3 || (stop.coords && stop.coords.fullAddress === stop.address)) {
+      setSuggestions([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const result = await searchAddress(stop.address, mapboxToken, session);
+        setSuggestions(result.suggestions);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stop.address, mapboxToken, session]);
+
+  async function pickSuggestion(s) {
+    setSuggestions([]);
+    try {
+      const coords = await retrieveSuggestion(s.mapboxId, mapboxToken, session);
+      onChange({ address: s.fullAddress, coords: coords ? { ...coords, fullAddress: s.fullAddress } : null });
+    } catch {
+      onChange({ address: s.fullAddress, coords: null });
+    }
+    setSession(createSearchSessionToken());
+  }
+
+  return (
+    <div className="relative">
+      <EmbossField
+        icon={MapPin}
+        label={`Stop ${index + 1}`}
+        placeholder="e.g. Dublin Airport"
+        value={stop.address}
+        onChange={(e) => onChange({ address: e.target.value, coords: null })}
+        trailing={
+          <button type="button" onClick={onRemove} className="shrink-0 rounded-full p-1" style={{ color: "#B4B2A9" }} aria-label="Remove stop">
+            <X size={13} />
+          </button>
+        }
+      />
+      {suggestions.length > 0 && (
+        <div
+          className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl"
+          style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 8px 20px rgba(44,44,42,0.15)" }}
+        >
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => pickSuggestion(s)}
+              className="block w-full px-4 py-2.5 text-left text-xs text-[#2C2C2A] hover:bg-[#F0EEE7]"
+            >
+              {s.fullAddress}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PassengerBooking({
   avgRating = null,
   reviewCount = 0,
@@ -112,7 +184,7 @@ export default function PassengerBooking({
   // otherwise wipe everything typed. Read/write through small helpers
   // so the rest of this file can still just call setPickup(...) etc.
   const patchDraft = (patch) => onDraftChange?.((prev) => ({ ...prev, ...patch }));
-  const { passengerName, passengerPhone, passengerEmail, pickup, dropoff, pickupCoords, dropoffCoords, date, time } = draft;
+  const { passengerName, passengerPhone, passengerEmail, pickup, dropoff, pickupCoords, dropoffCoords, date, time, stops = [] } = draft;
   const setPassengerName = (v) => patchDraft({ passengerName: v });
   const setPassengerPhone = (v) => patchDraft({ passengerPhone: v });
   const setPassengerEmail = (v) => patchDraft({ passengerEmail: v });
@@ -122,6 +194,23 @@ export default function PassengerBooking({
   const setDropoffCoords = (v) => patchDraft({ dropoffCoords: v });
   const setDate = (v) => patchDraft({ date: v });
   const setTime = (v) => patchDraft({ time: v });
+
+  // Intermediate stops, in order, between pickup and dropoff. Each is
+  // {id, address, coords} — coords null until a real suggestion is
+  // picked, same as pickup/dropoff. Capped at 3 — enough for real
+  // multi-stop trips (school run + shop, etc.) without letting the
+  // route (and therefore the fare) balloon unreasonably.
+  const MAX_STOPS = 3;
+  function addStop() {
+    if (stops.length >= MAX_STOPS) return;
+    patchDraft({ stops: [...stops, { id: `stop-${Date.now()}`, address: "", coords: null }] });
+  }
+  function updateStop(id, patch) {
+    patchDraft({ stops: stops.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
+  }
+  function removeStop(id) {
+    patchDraft({ stops: stops.filter((s) => s.id !== id) });
+  }
 
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
@@ -274,6 +363,16 @@ export default function PassengerBooking({
       setFormError("Please select your drop-off location from the suggestions list");
       return;
     }
+    // Same "must pick from suggestions" rule as pickup/dropoff — a stop
+    // with a typed-but-never-selected address has no coordinates to
+    // build a route with.
+    for (const stop of stops) {
+      if (!stop.address.trim()) continue; // an empty stop field is just ignored, not an error
+      if (!stop.coords || stop.coords.fullAddress !== stop.address) {
+        setFormError(`Please select stop ${stops.indexOf(stop) + 1} from the suggestions list, or remove it`);
+        return;
+      }
+    }
 
     setFormError("");
     onSubmit?.({
@@ -286,6 +385,9 @@ export default function PassengerBooking({
       passengerEmail: passengerEmail.trim() || null,
       pickup: { lat: pickupCoords.lat, lng: pickupCoords.lng, address: pickupCoords.fullAddress },
       dropoff: { lat: dropoffCoords.lat, lng: dropoffCoords.lng, address: dropoffCoords.fullAddress },
+      stops: stops
+        .filter((s) => s.address.trim() && s.coords)
+        .map((s) => ({ lat: s.coords.lat, lng: s.coords.lng, address: s.coords.fullAddress })),
       date,
       time,
     });
@@ -587,6 +689,28 @@ export default function PassengerBooking({
             )}
           </div>
           {locationError && <div className="text-[11px] text-[#A32D2D]">{locationError}</div>}
+
+          {stops.map((stop, i) => (
+            <StopField
+              key={stop.id}
+              stop={stop}
+              index={i}
+              mapboxToken={mapboxToken}
+              onChange={(patch) => updateStop(stop.id, patch)}
+              onRemove={() => removeStop(stop.id)}
+            />
+          ))}
+          {stops.length < MAX_STOPS && (
+            <button
+              type="button"
+              onClick={addStop}
+              className="flex items-center gap-1.5 self-start text-xs font-semibold"
+              style={{ color: "#185FA5" }}
+            >
+              <Plus size={13} /> Add a stop
+            </button>
+          )}
+
           <div className="relative">
             <EmbossField
               icon={MapPin}

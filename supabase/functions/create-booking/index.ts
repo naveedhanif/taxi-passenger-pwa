@@ -71,6 +71,7 @@ interface BookingRequest {
   dropoff_address: string;
   dropoff_lat: number;
   dropoff_lng: number;
+  stops?: { address: string; lat: number; lng: number }[];
   scheduled_time: string; // ISO string
   payment_timing: "now" | "later";
 }
@@ -166,8 +167,30 @@ Deno.serve(async (req) => {
     }
 
     // ---- Get a REAL route from Mapbox (server-side, never trust client distance/time) ----
+    // Stops (if any) are validated and included as waypoints in order —
+    // Mapbox's Directions API returns the TOTAL distance/duration
+    // across every leg in one request, so nothing downstream (the fare
+    // calculation) needs to change at all to support them.
+    const stops = Array.isArray(body.stops) ? body.stops : [];
+    if (stops.length > 3) {
+      return jsonError("A trip can have at most 3 stops", 400);
+    }
+    for (const stop of stops) {
+      if (
+        typeof stop.address !== "string" || !stop.address.trim() ||
+        typeof stop.lat !== "number" || typeof stop.lng !== "number"
+      ) {
+        return jsonError("Each stop needs a valid address and coordinates", 400);
+      }
+    }
+
     const mapboxToken = Deno.env.get("MAPBOX_TOKEN")!;
-    const coords = `${body.pickup_lng},${body.pickup_lat};${body.dropoff_lng},${body.dropoff_lat}`;
+    const allPoints = [
+      { lat: body.pickup_lat, lng: body.pickup_lng },
+      ...stops.map((s) => ({ lat: s.lat, lng: s.lng })),
+      { lat: body.dropoff_lat, lng: body.dropoff_lng },
+    ];
+    const coords = allPoints.map((p) => `${p.lng},${p.lat}`).join(";");
     const directionsRes = await fetch(
       `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}` +
       `?access_token=${mapboxToken}&geometries=geojson&overview=full`
@@ -182,7 +205,7 @@ Deno.serve(async (req) => {
     }
     const directionsJson = await directionsRes.json();
     if (!directionsJson.routes || directionsJson.routes.length === 0) {
-      return jsonError("No route found between these two locations", 400);
+      return jsonError("No route found for this trip", 400);
     }
     const route = directionsJson.routes[0];
     const distanceKm = Math.round((route.distance / 1000) * 100) / 100;
@@ -280,6 +303,7 @@ Deno.serve(async (req) => {
         dropoff_address: body.dropoff_address,
         dropoff_lat: body.dropoff_lat,
         dropoff_lng: body.dropoff_lng,
+        stops: stops,
         scheduled_time: body.scheduled_time,
         distance_km: distanceKm,
         // Feeds busy_expires_at (a database trigger — see

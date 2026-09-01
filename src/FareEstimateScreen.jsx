@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapPin, Clock, Route as RouteIcon, ArrowRight, Loader2, AlertCircle, CreditCard, Banknote } from "lucide-react";
-import { getRoute } from "./mapboxClient";
+import { getRouteMultiStop } from "./mapboxClient";
 import { getTariffPeriod, calculateFare, selectFareRule } from "./fareCalculator";
 import LiveMapView from "./LiveMapView";
 
@@ -25,6 +25,7 @@ const TARIFF_LABEL = {
  * @param {string} props.mapboxToken
  * @param {{lat:number,lng:number,address:string}} props.pickup
  * @param {{lat:number,lng:number,address:string}} props.dropoff
+ * @param {{lat:number,lng:number,address:string}[]} [props.stops] - intermediate stops, in order
  * @param {Date} props.scheduledTime
  * @param {Array} props.fareRules - driver's fare_rules rows
  * @param {number} props.preBookingFee - driver's pre_booking_fee
@@ -36,6 +37,7 @@ export default function FareEstimateScreen({
   mapboxToken,
   pickup,
   dropoff,
+  stops = [],
   scheduledTime,
   fareRules,
   preBookingFee,
@@ -59,9 +61,13 @@ export default function FareEstimateScreen({
     async function loadEstimate() {
       setStatus("loading");
       try {
-        const routeResult = await getRoute(pickup, dropoff, mapboxToken);
+        // Stops (if any) are inserted between pickup and dropoff — the
+        // fare math itself (calculateFare below) doesn't need to know
+        // about them at all, since Mapbox already returns the TOTAL
+        // distance/duration across every leg in one request.
+        const routeResult = await getRouteMultiStop([pickup, ...stops, dropoff], mapboxToken);
         if (!routeResult) {
-          throw new Error("No route found between these two locations");
+          throw new Error("No route found for this trip");
         }
 
         const period = getTariffPeriod(scheduledTime);
@@ -95,7 +101,8 @@ export default function FareEstimateScreen({
     return () => {
       cancelled = true;
     };
-  }, [pickup, dropoff, scheduledTime, fareRules, preBookingFee, mapboxToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickup, dropoff, JSON.stringify(stops), scheduledTime, fareRules, preBookingFee, mapboxToken]);
 
   return (
     <div
@@ -144,6 +151,20 @@ export default function FareEstimateScreen({
               routeGeometry={route.routeGeometry}
             />
           </div>
+
+          {stops.length > 0 && (
+            <div
+              className="mb-4 rounded-xl p-3.5 text-xs"
+              style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}
+            >
+              <div className="mb-1.5 font-semibold text-[#5F5E5A]">Stops on this trip</div>
+              {stops.map((s, i) => (
+                <div key={i} className="flex items-center gap-1.5 py-0.5 text-[#2C2C2A]">
+                  <MapPin size={11} color="#8C8977" /> {s.address}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div
             className="mb-4 flex items-center justify-between rounded-xl px-4 py-3"

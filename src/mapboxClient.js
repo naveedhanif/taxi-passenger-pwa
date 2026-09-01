@@ -129,6 +129,25 @@ async function getRoute(origin, destination, token) {
   return parseDirectionsRoute(await res.json());
 }
 
+/**
+ * Same as getRoute, but for any number of waypoints in order —
+ * pickup, any intermediate stops, dropoff. Mapbox's own Directions API
+ * computes the TOTAL distance/duration across every leg in one request,
+ * so this feeds fareCalculator.js exactly the same way a plain 2-point
+ * route already does — the fare math itself needed zero changes to
+ * support stops.
+ * @param {{lat:number, lng:number}[]} points - in order: origin, ...stops, destination (minimum 2)
+ */
+async function getRouteMultiStop(points, token) {
+  if (!points || points.length < 2) throw new Error("getRouteMultiStop needs at least 2 points");
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(";");
+  const url = `${MAPBOX_BASE}/directions/v5/mapbox/driving-traffic/${coords}` +
+    `?access_token=${token}&geometries=geojson&overview=full`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Mapbox directions failed: ${res.status}`);
+  return parseDirectionsRoute(await res.json());
+}
+
 /** Turn a raw Mapbox directions response into distance/duration/route geometry. */
 function parseDirectionsRoute(json) {
   if (!json || !Array.isArray(json.routes) || json.routes.length === 0) {
@@ -148,6 +167,7 @@ export {
   retrieveSuggestion,
   reverseGeocode,
   getRoute,
+  getRouteMultiStop,
   parseSuggestions,
   parseRetrieveFeature,
   parseDirectionsRoute,

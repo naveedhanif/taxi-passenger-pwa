@@ -548,6 +548,15 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
               <div className="text-[11px] text-[#8C8977]">Pickup</div>
             </div>
           </div>
+          {(booking.stops || []).map((stop, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <MapPin size={14} color="#B4772E" className="mt-0.5" />
+              <div>
+                <div className="text-[#2C2C2A]">{stop.address}</div>
+                <div className="text-[11px] text-[#8C8977]">Stop {i + 1}</div>
+              </div>
+            </div>
+          ))}
           <div className="flex items-start gap-2">
             <MapPin size={14} color="#185FA5" className="mt-0.5" />
             <div>
