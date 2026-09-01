@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       // for the fuller reasoning on why that's avoided throughout this
       // codebase).
       supabase.from("drivers").select("photo_url").eq("id", booking.driver_id).maybeSingle(),
-      supabase.from("vehicles").select("photo_url").eq("driver_id", booking.driver_id).maybeSingle(),
+      supabase.from("vehicles").select("photo_url").eq("driver_id", booking.driver_id).eq("is_active", true).maybeSingle(),
     ]);
 
     // ---- Live position, only meaningful once the driver is actually en route ----

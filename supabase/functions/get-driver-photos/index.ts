@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const [driverRes, vehicleRes] = await Promise.all([
       supabase.from("drivers").select("photo_url").eq("id", body.driver_id).maybeSingle(),
-      supabase.from("vehicles").select("photo_url").eq("driver_id", body.driver_id).maybeSingle(),
+      supabase.from("vehicles").select("photo_url").eq("driver_id", body.driver_id).eq("is_active", true).maybeSingle(),
     ]);
 
     return new Response(
