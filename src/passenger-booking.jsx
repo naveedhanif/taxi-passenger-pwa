@@ -100,6 +100,7 @@ export default function PassengerBooking({
   onOpenAccount,
   savedLocations = [],
   onSaveLocation,
+  onOpenDriverProfile,
 }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
@@ -389,9 +390,13 @@ export default function PassengerBooking({
         </div>
       </div>
 
-      {/* Vehicle + rating strip */}
-      <div
-        className="mb-5 flex items-center gap-3 rounded-xl px-4 py-3.5"
+      {/* Vehicle + rating strip — tappable, opens the full driver
+          profile with real reviews (previously just a static display
+          with no way to actually read what those reviews said). */}
+      <button
+        type="button"
+        onClick={onOpenDriverProfile}
+        className="mb-5 flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left"
         style={{
           background: "#FBFAF6",
           border: "1px solid #ECE9E0",
@@ -434,7 +439,7 @@ export default function PassengerBooking({
             <span className="text-xs font-medium text-[#5F5E5A]">New driver</span>
           )}
         </div>
-      </div>
+      </button>
 
       {/* Contact the driver directly — visible before booking, not just
           after. Uses the same phoneLinks helper as the post-booking

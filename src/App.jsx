@@ -8,6 +8,7 @@ import BookingConfirmedScreen from "./BookingConfirmedScreen.jsx";
 import GuestAccountChoice from "./GuestAccountChoice.jsx";
 import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
+import DriverProfileScreen from "./DriverProfileScreen.jsx";
 import { createBooking } from "./bookingApi.js";
 import { getBookingStatus } from "./bookingStatusApi.js";
 import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./customerAuth.js";
@@ -1016,8 +1017,23 @@ export default function App() {
               }}
               savedLocations={savedLocations}
               onSaveLocation={customerSession?.customer ? handleSaveLocation : undefined}
+              onOpenDriverProfile={() => go("driver-profile")}
             />
           </>
+        )}
+
+        {screen === "driver-profile" && (
+          <DriverProfileScreen
+            driverId={driverId}
+            businessName={businessName}
+            driverPhotoUrl={driverPhotoUrl}
+            vehiclePhotoUrl={vehiclePhotoUrl}
+            vehicle={vehicle}
+            avgRating={avgRating}
+            reviewCount={reviewCount}
+            licenceVerified={licenceVerified}
+            onBack={goBack}
+          />
         )}
 
         {screen === "fare" && (
