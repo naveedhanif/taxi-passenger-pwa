@@ -95,6 +95,8 @@ export default function PassengerBooking({
   isDriverAvailable = true,
   driverId,
   driverPhoneNumber,
+  driverPhotoUrl,
+  vehiclePhotoUrl,
   onOpenAccount,
   savedLocations = [],
   onSaveLocation,
@@ -328,13 +330,17 @@ export default function PassengerBooking({
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div
-            className="flex h-10 w-10 items-center justify-center rounded-full"
+            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
             style={{
               background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)",
               boxShadow: "3px 3px 8px rgba(44,44,42,0.14), -2px -2px 6px rgba(255,255,255,0.9)",
             }}
           >
-            <Navigation size={17} color="#185FA5" />
+            {driverPhotoUrl ? (
+              <img src={driverPhotoUrl} alt={businessName || "Driver"} className="h-full w-full object-cover" />
+            ) : (
+              <Navigation size={17} color="#185FA5" />
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
@@ -393,13 +399,17 @@ export default function PassengerBooking({
         }}
       >
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full"
           style={{
             background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)",
             boxShadow: "3px 3px 8px rgba(44,44,42,0.14), -2px -2px 6px rgba(255,255,255,0.9)",
           }}
         >
-          <Car size={19} color="#185FA5" />
+          {vehiclePhotoUrl ? (
+            <img src={vehiclePhotoUrl} alt="Vehicle" className="h-full w-full object-cover" />
+          ) : (
+            <Car size={19} color="#185FA5" />
+          )}
         </div>
         <div className="flex-1">
           <div className="text-sm font-medium text-[#2C2C2A]">

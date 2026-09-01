@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, X, Loader2, AlertCircle, Star, HeartHandshake } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check } from "lucide-react";
 import { getBookingStatus, cancelBooking } from "./bookingStatusApi.js";
 import { submitReview } from "./reviewApi.js";
 import { createTipPayment } from "./tipApi.js";
@@ -168,7 +168,7 @@ function EmbossCard({ children, className = "" }) {
  * @param {function} props.onBack
  * @param {function} [props.onBookAgain]
  */
-export default function BookingStatus({ bookingId, guestAccessToken, customerSessionToken, onBack, onBookAgain }) {
+export default function BookingStatus({ bookingId, guestAccessToken, customerSessionToken, isSharedView = false, onBack, onBookAgain }) {
   useGoogleFont();
   const [data, setData] = useState(null); // { booking, driver, vehicle, position }
   const [loadError, setLoadError] = useState("");
@@ -208,6 +208,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   const [tipClientSecret, setTipClientSecret] = useState(null);
   const [creatingTipIntent, setCreatingTipIntent] = useState(false);
   const [tipSetupError, setTipSetupError] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -311,6 +312,37 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
     }
   }
 
+  async function handleShareTrip() {
+    if (!guestAccessToken) return;
+    // Reuses the app's own existing guest-access-token mechanism —
+    // get-booking-status already treats a matching access_token as
+    // valid proof of ownership for read access, so this link just
+    // hands that same proof to whoever it's shared with. Same origin/
+    // pathname (driver slug) as the current page, with track/token
+    // added — App.jsx's driver-lookup effect watches for exactly this
+    // shape and jumps straight to a read-only status view.
+    const shareUrl = `${window.location.origin}${window.location.pathname}?track=${bookingId}&token=${guestAccessToken}`;
+    const shareText = `Track my taxi trip with ${driver?.businessName || "my driver"}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Trip tracking", text: shareText, url: shareUrl });
+        return;
+      } catch {
+        // User cancelled the native share sheet, or it's unsupported for
+        // this content — fall through to clipboard copy instead.
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link to share your trip:", shareUrl);
+    }
+  }
+
   if (!bookingId) {
     return (
       <div className="mx-auto w-full max-w-[400px] p-10 text-center text-sm text-[#8C8977]">
@@ -366,8 +398,20 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         >
           <ArrowLeft size={15} color="#5F5E5A" />
         </button>
-        <div className="text-sm font-semibold text-[#2C2C2A]">Your booking</div>
-        <div className="w-9" />
+        <div className="text-sm font-semibold text-[#2C2C2A]">{isSharedView ? "Shared trip" : "Your booking"}</div>
+        <div className="flex w-9 justify-end">
+          {!isSharedView && guestAccessToken && (
+            <button
+              onClick={handleShareTrip}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+              style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+              aria-label="Share trip"
+              title="Share this trip with someone"
+            >
+              {shareCopied ? <Check size={14} color="#27500A" /> : <Share2 size={14} color="#5F5E5A" />}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Status banner */}
@@ -442,10 +486,14 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         <EmbossCard className="mb-4 flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
+              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white"
               style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
             >
-              {driver.businessName.charAt(0)}
+              {driver.photoUrl ? (
+                <img src={driver.photoUrl} alt={driver.businessName} className="h-full w-full object-cover" />
+              ) : (
+                driver.businessName.charAt(0)
+              )}
             </div>
             <div>
               <div className="text-sm font-medium text-[#2C2C2A]">{driver.businessName}</div>
@@ -483,7 +531,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           replacement. Only shown while the trip is still active (not
           done/cancelled), matching what actually needs live back-and-
           forth communication. */}
-      {!isDone && !isCanceled && (
+      {!isDone && !isCanceled && !isSharedView && (
         <div className="mb-4">
           <ChatPanel bookingId={bookingId} guestAccessToken={guestAccessToken} customerSessionToken={customerSessionToken} selfRole="passenger" />
         </div>
@@ -528,7 +576,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         )}
       </EmbossCard>
 
-      {isDone && !hasRated && (
+      {isDone && !hasRated && !isSharedView && (
         <EmbossCard className="mb-4 p-5">
           <div className="mb-3 text-center text-sm font-semibold text-[#2C2C2A]">
             How was your trip with {driver.businessName || "your driver"}?
@@ -586,7 +634,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         </div>
       )}
 
-      {isDone && tipAmountPaid == null && tipChoice !== "skip" && (
+      {isDone && tipAmountPaid == null && tipChoice !== "skip" && !isSharedView && (
         <EmbossCard className="mb-4 p-5">
           <div className="mb-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-[#2C2C2A]">
             <HeartHandshake size={16} color="#378ADD" /> Add a tip?
@@ -694,7 +742,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         >
           Back to home
         </button>
-      ) : booking.selfCancelable ? (
+      ) : booking.selfCancelable && !isSharedView ? (
         <button
           onClick={handleCancel}
           disabled={canceling}
@@ -707,6 +755,8 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         >
           <X size={14} /> {canceling ? "Cancelling…" : "Cancel booking"}
         </button>
+      ) : isSharedView ? (
+        <div className="text-center text-xs text-[#8C8977]">You're viewing a shared trip.</div>
       ) : phoneLinks ? (
         <div className="text-center text-xs text-[#8C8977]">
           Your driver is already on the way — contact them directly above to cancel.

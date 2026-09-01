@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
 
     // ---- Driver + vehicle (public, safe fields only — same views the
     // booking form uses) ----
-    const [driverRes, vehicleRes] = await Promise.all([
+    const [driverRes, vehicleRes, driverPhotoRes, vehiclePhotoRes] = await Promise.all([
       supabase
         .from("public_driver_profiles")
         .select("business_name, phone_number")
@@ -116,6 +116,13 @@ Deno.serve(async (req) => {
         .select("make, model, color, seats")
         .eq("driver_id", booking.driver_id)
         .maybeSingle(),
+      // photo_url isn't exposed by the shared views above — queried
+      // directly from the underlying tables instead of risking a
+      // blind redefinition of those views (see get-driver-availability
+      // for the fuller reasoning on why that's avoided throughout this
+      // codebase).
+      supabase.from("drivers").select("photo_url").eq("id", booking.driver_id).maybeSingle(),
+      supabase.from("vehicles").select("photo_url").eq("driver_id", booking.driver_id).maybeSingle(),
     ]);
 
     // ---- Live position, only meaningful once the driver is actually en route ----
@@ -151,8 +158,9 @@ Deno.serve(async (req) => {
         driver: {
           businessName: driverRes.data?.business_name ?? null,
           phoneNumber: driverRes.data?.phone_number ?? null,
+          photoUrl: driverPhotoRes.data?.photo_url ?? null,
         },
-        vehicle: vehicleRes.data ?? null,
+        vehicle: vehicleRes.data ? { ...vehicleRes.data, photoUrl: vehiclePhotoRes.data?.photo_url ?? null } : null,
         position,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

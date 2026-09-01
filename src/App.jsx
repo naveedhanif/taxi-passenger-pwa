@@ -13,7 +13,7 @@ import { getBookingStatus } from "./bookingStatusApi.js";
 import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./customerAuth.js";
 import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
-import { getDriverOnlineStatus } from "./driverAvailabilityApi.js";
+import { getDriverOnlineStatus, getDriverPhotos } from "./driverAvailabilityApi.js";
 import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./savedLocationsApi.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
@@ -66,6 +66,15 @@ export default function App() {
   // doesn't match any active driver.
   const [driverId, setDriverId] = useState(null);
   const [driverLookupStatus, setDriverLookupStatus] = useState("loading"); // loading | found | not_found | no_slug
+  // True when this screen was reached via a shared tracking link
+  // (?track=bookingId&token=accessToken) rather than by the actual
+  // passenger going through the real booking flow — see
+  // passenger-booking-status.jsx's "Share trip" button, which builds
+  // links in exactly this shape. Tells BookingStatus to hide Cancel/
+  // Rate/Tip, since whoever opened a shared link isn't necessarily the
+  // real passenger and shouldn't be able to take actions on their
+  // behalf.
+  const [isSharedView, setIsSharedView] = useState(false);
 
   // Real booking state — populated by the actual Edge Function response,
   // not demo data. bookingResult is null until createBooking succeeds.
@@ -117,6 +126,8 @@ export default function App() {
   // not working today is a different situation from one who's mid-trip
   // right now, and deserves a different message.
   const [isDriverOnline, setIsDriverOnline] = useState(true);
+  const [driverPhotoUrl, setDriverPhotoUrl] = useState(null);
+  const [vehiclePhotoUrl, setVehiclePhotoUrl] = useState(null);
 
   // ---- Real customer session (signed-in passengers) ----
   // Resolved from Supabase Auth, not assumed. Used to (a) pass the real
@@ -590,6 +601,21 @@ export default function App() {
       setDriverId(data.id);
       setBusinessName(data.business_name || "");
       setDriverLookupStatus("found");
+
+      // Shared trip link — see passenger-booking-status.jsx's "Share
+      // trip" button, which builds a link in exactly this shape. Reuses
+      // the same bookingResult/status-screen mechanism a real booking
+      // already uses; isSharedView just tells BookingStatus to hide
+      // Cancel/Rate/Tip, since whoever opened this link isn't
+      // necessarily the actual passenger.
+      const params = new URLSearchParams(window.location.search);
+      const trackId = params.get("track");
+      const trackToken = params.get("token");
+      if (trackId && trackToken) {
+        setBookingResult({ bookingId: trackId, accessToken: trackToken, paymentTiming: null, fare: null });
+        setIsSharedView(true);
+        go("status");
+      }
     })();
 
     return () => {
@@ -604,7 +630,7 @@ export default function App() {
     let cancelled = false;
 
     async function loadDriverData() {
-      const [vehicleRes, fareRulesRes, profileRes, onlineStatus] = await Promise.all([
+      const [vehicleRes, fareRulesRes, profileRes, onlineStatus, photos] = await Promise.all([
         supabase
           .from("public_vehicle_profiles")
           .select("make, model, color, seats")
@@ -621,11 +647,14 @@ export default function App() {
           .eq("id", driverId)
           .maybeSingle(),
         getDriverOnlineStatus(driverId),
+        getDriverPhotos(driverId),
       ]);
 
       if (cancelled) return;
 
       setIsDriverOnline(onlineStatus);
+      setDriverPhotoUrl(photos.driverPhotoUrl);
+      setVehiclePhotoUrl(photos.vehiclePhotoUrl);
       if (!vehicleRes.error) setVehicle(vehicleRes.data);
       if (!fareRulesRes.error) setFareRules(fareRulesRes.data ?? []);
       if (!profileRes.error && profileRes.data) {
@@ -979,6 +1008,8 @@ export default function App() {
               isDriverAvailable={isDriverAvailable}
               driverId={driverId}
               driverPhoneNumber={driverPhoneNumber}
+              driverPhotoUrl={driverPhotoUrl}
+              vehiclePhotoUrl={vehiclePhotoUrl}
               onOpenAccount={() => {
                 authOriginRef.current = "account";
                 go(customerSession?.customer ? "account" : "auth");
@@ -1078,11 +1109,13 @@ export default function App() {
             // sending both whenever available is always safe.
             guestAccessToken={bookingResult?.accessToken ?? activeGuestBooking?.accessToken ?? null}
             customerSessionToken={customerSession?.accessToken || null}
+            isSharedView={isSharedView}
             onBack={goBack}
             onBookAgain={() => {
               clearGuestBooking();
               setBookingResult(null);
               setFormSelection(null);
+              setIsSharedView(false);
               go("booking");
             }}
           />
