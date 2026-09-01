@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
+import { MessageCircle, Send, Loader2, AlertCircle } from "lucide-react";
 import { listMessages, sendMessage } from "./messagesApi.js";
 
 const POLL_INTERVAL_MS = 6000;
@@ -16,6 +16,11 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // Previously an error here just silently returned, leaving loaded
+  // permanently false — the panel looked exactly like an infinite
+  // "Loading…" spinner with no way to tell it had actually failed
+  // (e.g. the messages table/functions not deployed yet).
+  const [loadError, setLoadError] = useState("");
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -24,7 +29,13 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
 
     async function load() {
       const result = await listMessages({ bookingId, guestAccessToken, customerSessionToken });
-      if (cancelled || result.error) return;
+      if (cancelled) return;
+      if (result.error) {
+        setLoadError(result.error);
+        setLoaded(true);
+        return;
+      }
+      setLoadError("");
       setMessages(result.messages || []);
       setLoaded(true);
     }
@@ -68,6 +79,10 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
         {!loaded ? (
           <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[#8C8977]">
             <Loader2 size={12} className="animate-spin" /> Loading…
+          </div>
+        ) : loadError ? (
+          <div className="flex items-center justify-center gap-1.5 py-4 text-center text-xs" style={{ color: "#791F1F" }}>
+            <AlertCircle size={12} /> {loadError}
           </div>
         ) : messages.length === 0 ? (
           <div className="py-4 text-center text-xs text-[#8C8977]">No messages yet — say hello!</div>
