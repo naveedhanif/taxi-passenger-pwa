@@ -92,6 +92,9 @@ export default function AccountHistoryScreen({
   onSelectBooking = () => {},
   onBookAgain,
   onDeleteLocation = () => {},
+  recurringRides = [],
+  onToggleRecurringRide = () => {},
+  onDeleteRecurringRide = () => {},
   onSignOut = () => {},
   onBack = () => {},
   onUpdateProfile = null,
@@ -273,6 +276,43 @@ export default function AccountHistoryScreen({
                 <button onClick={() => onDeleteLocation(loc.id)}>
                   <Trash2 size={13} color="#B4B2A9" />
                 </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recurring ride templates */}
+      {recurringRides.length > 0 && (
+        <div className="mb-5">
+          <div className="mb-2 text-xs font-medium text-[#5F5E5A]">Recurring rides</div>
+          <div
+            className="rounded-xl p-2"
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+          >
+            {recurringRides.map((ride) => (
+              <div key={ride.id} className="flex items-center justify-between px-2 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <RotateCw size={14} color={ride.active ? "#185FA5" : "#B4B2A9"} />
+                  <div>
+                    <div className="text-xs font-medium text-[#2C2C2A]">{ride.label}</div>
+                    <div className="text-[11px] text-[#8C8977]">
+                      {(ride.days_of_week || []).map((d) => d.slice(0, 3)).join(", ")} · {ride.time_of_day}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onToggleRecurringRide(ride.id, !ride.active)}
+                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                    style={{ background: ride.active ? "#EAF3DE" : "#F1EFE8", color: ride.active ? "#27500A" : "#8C8977" }}
+                  >
+                    {ride.active ? "On" : "Off"}
+                  </button>
+                  <button onClick={() => onDeleteRecurringRide(ride.id)}>
+                    <Trash2 size={13} color="#B4B2A9" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

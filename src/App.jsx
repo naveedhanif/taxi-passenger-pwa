@@ -16,6 +16,7 @@ import { getCustomerBookings } from "./customerBookingsApi.js";
 import { supabase } from "./supabaseClient.js";
 import { getDriverOnlineStatus, getDriverPhotos } from "./driverAvailabilityApi.js";
 import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./savedLocationsApi.js";
+import { listRecurringRides, addRecurringRide, toggleRecurringRide, deleteRecurringRide } from "./recurringRidesApi.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -574,6 +575,66 @@ export default function App() {
     if (!result.error) setSavedLocations((prev) => prev.filter((l) => l.id !== locationId));
   }
 
+  // ---- Recurring ride templates (signed-in customers only) ----
+  // These are TEMPLATES, not automatically-charged bookings — see
+  // manage-recurring-rides/index.ts for why genuine unattended billing
+  // isn't built here. A matching day just shows a one-tap banner that
+  // pre-fills the booking form; the passenger still confirms and pays
+  // every time, same as any other booking.
+  const [recurringRides, setRecurringRides] = useState([]);
+
+  async function loadRecurringRides() {
+    if (!customerSession?.accessToken || !driverId) return;
+    const result = await listRecurringRides({ driverId, customerSessionToken: customerSession.accessToken });
+    if (!result.error) setRecurringRides(result.rides || []);
+  }
+
+  useEffect(() => {
+    if (customerSession?.customer) loadRecurringRides();
+    else setRecurringRides([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerSession?.customer, driverId]);
+
+  async function handleAddRecurringRide({ label, pickup, dropoff, daysOfWeek, timeOfDay }) {
+    if (!customerSession?.accessToken || !driverId) return { error: "Not signed in" };
+    const result = await addRecurringRide({ driverId, customerSessionToken: customerSession.accessToken, label, pickup, dropoff, daysOfWeek, timeOfDay });
+    if (!result.error) loadRecurringRides();
+    return result;
+  }
+
+  async function handleToggleRecurringRide(rideId, active) {
+    if (!customerSession?.accessToken || !driverId) return;
+    const result = await toggleRecurringRide({ driverId, customerSessionToken: customerSession.accessToken, rideId, active });
+    if (!result.error) setRecurringRides((prev) => prev.map((r) => (r.id === rideId ? { ...r, active } : r)));
+  }
+
+  async function handleDeleteRecurringRide(rideId) {
+    if (!customerSession?.accessToken || !driverId) return;
+    const result = await deleteRecurringRide({ driverId, customerSessionToken: customerSession.accessToken, rideId });
+    if (!result.error) setRecurringRides((prev) => prev.filter((r) => r.id !== rideId));
+  }
+
+  // Today's matching active recurring ride, if any — the banner on the
+  // main booking screen just checks "does today's day-of-week appear in
+  // this ride's days_of_week", not an exact time window, so it's
+  // visible any time that day rather than only right at the scheduled
+  // moment.
+  const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayMatchingRide = recurringRides.find((r) => r.active && (r.days_of_week || []).includes(todayKey));
+
+  function handleUseRecurringRide(ride) {
+    setBookingDraft((prev) => ({
+      ...prev,
+      pickup: ride.pickup_address,
+      pickupCoords: { lat: ride.pickup_lat, lng: ride.pickup_lng, fullAddress: ride.pickup_address },
+      dropoff: ride.dropoff_address,
+      dropoffCoords: { lat: ride.dropoff_lat, lng: ride.dropoff_lng, fullAddress: ride.dropoff_address },
+      date: new Date().toISOString().slice(0, 10),
+      time: ride.time_of_day,
+    }));
+  }
+
   // Step 1: resolve the URL path (e.g. /johns-taxi) to a real driver id
   // via booking_slug. This is what makes one deployed app work for every
   // driver — the slug in the URL decides who the passenger is booking.
@@ -997,6 +1058,16 @@ export default function App() {
                 </button>
               </div>
             )}
+            {todayMatchingRide && (
+              <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center justify-between gap-2 rounded-xl p-4 text-sm" style={{ background: "#EAF3DE", color: "#27500A" }}>
+                <span>
+                  Your <strong>{todayMatchingRide.label}</strong> is today at {todayMatchingRide.time_of_day}.
+                </span>
+                <button onClick={() => handleUseRecurringRide(todayMatchingRide)} className="font-semibold underline shrink-0">
+                  Fill in details
+                </button>
+              </div>
+            )}
             <PassengerBooking
               onSubmit={handleBookingFormSubmit}
               mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
@@ -1019,6 +1090,7 @@ export default function App() {
               savedLocations={savedLocations}
               onSaveLocation={customerSession?.customer ? handleSaveLocation : undefined}
               onOpenDriverProfile={() => go("driver-profile")}
+              onMakeRecurring={customerSession?.customer ? handleAddRecurringRide : undefined}
             />
           </>
         )}
@@ -1175,6 +1247,9 @@ export default function App() {
                 bookings={accountBookings}
                 savedLocations={savedLocations}
                 onDeleteLocation={handleDeleteLocation}
+                recurringRides={recurringRides}
+                onToggleRecurringRide={handleToggleRecurringRide}
+                onDeleteRecurringRide={handleDeleteRecurringRide}
                 onSelectBooking={(booking) => {
                   setBookingResult({ bookingId: booking.id, accessToken: null, paymentTiming: null, fare: null });
                   go("status");

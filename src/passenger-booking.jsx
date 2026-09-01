@@ -59,6 +59,106 @@ function MapPreview({ hasRoute }) {
   );
 }
 
+const DAY_OPTIONS = [
+  { key: "mon", label: "M" },
+  { key: "tue", label: "T" },
+  { key: "wed", label: "W" },
+  { key: "thu", label: "T" },
+  { key: "fri", label: "F" },
+  { key: "sat", label: "S" },
+  { key: "sun", label: "S" },
+];
+
+/** Lets a passenger save the CURRENT trip (once pickup/dropoff have
+ * real coordinates) as a recurring template — pre-filling the form on
+ * matching future days, not automatically booking or charging. */
+function RecurringToggle({ pickupCoords, dropoffCoords, time, onMakeRecurring }) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [days, setDays] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  function toggleDay(key) {
+    setDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
+  }
+
+  async function handleSave() {
+    if (!label.trim() || days.length === 0 || !time) {
+      setError("Add a name, pick at least one day, and set a time above");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const result = await onMakeRecurring({
+      label: label.trim(),
+      pickup: { lat: pickupCoords.lat, lng: pickupCoords.lng, address: pickupCoords.fullAddress },
+      dropoff: { lat: dropoffCoords.lat, lng: dropoffCoords.lng, address: dropoffCoords.fullAddress },
+      daysOfWeek: days,
+      timeOfDay: time,
+    });
+    setSaving(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    setSaved(true);
+    setOpen(false);
+  }
+
+  if (saved) {
+    return <div className="mt-3 text-xs" style={{ color: "#27500A" }}>Saved as a recurring ride — see Account to manage it.</div>;
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-3 text-xs font-semibold" style={{ color: "#185FA5" }}>
+        + Make this a recurring ride
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl p-3.5" style={{ background: "#F1EFE8" }}>
+      <input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Name this trip (e.g. Morning commute)"
+        className="mb-2.5 w-full rounded-lg bg-white px-3 py-2 text-xs text-[#2C2C2A] placeholder:text-[#B4B2A9]"
+      />
+      <div className="mb-2.5 flex gap-1.5">
+        {DAY_OPTIONS.map((d) => (
+          <button
+            key={d.key}
+            type="button"
+            onClick={() => toggleDay(d.key)}
+            className="h-7 w-7 rounded-full text-[11px] font-semibold"
+            style={{ background: days.includes(d.key) ? "#185FA5" : "#E4E2DA", color: days.includes(d.key) ? "white" : "#5F5E5A" }}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+      {error && <div className="mb-2 text-[11px]" style={{ color: "#A32D2D" }}>{error}</div>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-lg px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          style={{ background: "#185FA5" }}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3.5 py-2 text-xs font-medium text-[#5F5E5A]">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EmbossField({ icon: Icon, label, trailing, ...props }) {
   return (
     <div>
@@ -173,6 +273,7 @@ export default function PassengerBooking({
   savedLocations = [],
   onSaveLocation,
   onOpenDriverProfile,
+  onMakeRecurring,
 }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
@@ -771,6 +872,15 @@ export default function PassengerBooking({
             </div>
           )}
         </div>
+
+        {onMakeRecurring && pickupCoords && dropoffCoords && (
+          <RecurringToggle
+            pickupCoords={pickupCoords}
+            dropoffCoords={dropoffCoords}
+            time={time}
+            onMakeRecurring={onMakeRecurring}
+          />
+        )}
 
         {formError && <div className="mt-3 text-[11px] text-[#A32D2D]">{formError}</div>}
 

@@ -342,7 +342,11 @@ Deno.serve(async (req) => {
       await stripe.paymentIntents.cancel(paymentIntent.id).catch((cancelErr) => {
         console.error("Failed to cancel orphaned PaymentIntent:", cancelErr);
       });
-      return jsonError("Couldn't create the booking", 500);
+      console.error("Booking insert failed:", bookingError);
+      return jsonError(
+        `Couldn't create the booking: ${bookingError?.message || "unknown database error"}`,
+        500
+      );
     }
 
     // Attach the booking id back onto the PaymentIntent's metadata, now
