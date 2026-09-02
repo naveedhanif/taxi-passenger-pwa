@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { MapPin, Clock, Route as RouteIcon, ArrowRight, Loader2, AlertCircle, CreditCard, Banknote } from "lucide-react";
+import { MapPin, Clock, Route as RouteIcon, ArrowRight, Loader2, AlertCircle, CreditCard, Banknote, Tag, Check, X } from "lucide-react";
 import { getRouteMultiStop } from "./mapboxClient";
 import { getTariffPeriod, calculateFare, selectFareRule } from "./fareCalculator";
+import { lookupPromoCode } from "./promoApi.js";
 import LiveMapView from "./LiveMapView";
 
 function useGoogleFont() {
@@ -35,6 +36,8 @@ const TARIFF_LABEL = {
  * @param {function} props.onBack
  */
 export default function FareEstimateScreen({
+  driverId,
+  customerSessionToken,
   mapboxToken,
   pickup,
   dropoff,
@@ -53,6 +56,37 @@ export default function FareEstimateScreen({
   const [fare, setFare] = useState(null);
   const [tariffPeriod, setTariffPeriod] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  // A code the passenger typed/pasted in themselves — takes priority
+  // over the automatically-detected `promo` prop when present, since
+  // it's an explicit choice. Cleared back to auto-detection if they
+  // remove it.
+  const [manualCode, setManualCode] = useState("");
+  const [manualPromo, setManualPromo] = useState(null);
+  const [manualStatus, setManualStatus] = useState("idle"); // idle | checking | error
+  const [manualError, setManualError] = useState("");
+  const effectivePromo = manualPromo || promo;
+
+  async function handleApplyCode() {
+    if (!manualCode.trim()) return;
+    setManualStatus("checking");
+    setManualError("");
+    const result = await lookupPromoCode({ driverId, code: manualCode.trim(), customerSessionToken });
+    if (result.error) {
+      setManualStatus("error");
+      setManualError(result.error);
+      setManualPromo(null);
+      return;
+    }
+    setManualStatus("idle");
+    setManualPromo(result.promo);
+  }
+
+  function handleClearManualCode() {
+    setManualCode("");
+    setManualPromo(null);
+    setManualStatus("idle");
+    setManualError("");
+  }
   // "now": full fare charged upfront. "later": only the deposit is
   // charged now; the rest is settled with the driver in the taxi.
   const [paymentTiming, setPaymentTiming] = useState("now");
@@ -112,10 +146,10 @@ export default function FareEstimateScreen({
   // and compute it off the pre-any-discount amount, not fare.total
   // (which already has the standing discount baked in).
   const fareBeforeAnyDiscount = fare ? Math.round((fare.total + fare.discountAmount) * 100) / 100 : 0;
-  const promoDiscountAmount = fare && promo
-    ? Math.round(Math.min(fareBeforeAnyDiscount * (promo.discountValue / 100), fareBeforeAnyDiscount) * 100) / 100
+  const promoDiscountAmount = fare && effectivePromo
+    ? Math.round(Math.min(fareBeforeAnyDiscount * (effectivePromo.discountValue / 100), fareBeforeAnyDiscount) * 100) / 100
     : 0;
-  const displayTotal = fare ? (promo ? Math.round((fareBeforeAnyDiscount - promoDiscountAmount) * 100) / 100 : fare.total) : 0;
+  const displayTotal = fare ? (effectivePromo ? Math.round((fareBeforeAnyDiscount - promoDiscountAmount) * 100) / 100 : fare.total) : 0;
 
   return (
     <div
@@ -197,6 +231,68 @@ export default function FareEstimateScreen({
             </span>
           </div>
 
+          {/* Manual promo code entry — an auto-detected code (if any)
+              already applies without this; this is only for a code the
+              passenger has to hand explicitly and wants to use instead. */}
+          <div
+            className="mb-4 rounded-xl p-4"
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+          >
+            {manualPromo ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#27500A" }}>
+                  <Tag size={13} />
+                  {manualPromo.code} applied — {manualPromo.discountValue}% off
+                </div>
+                <button onClick={handleClearManualCode} className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: "#F0EEE7" }}>
+                  <X size={11} color="#5F5E5A" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[#5F5E5A]">
+                  <Tag size={13} /> Have a promo code?
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter code"
+                    value={manualCode}
+                    onChange={(e) => {
+                      setManualCode(e.target.value.toUpperCase());
+                      if (manualStatus === "error") {
+                        setManualStatus("idle");
+                        setManualError("");
+                      }
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleApplyCode()}
+                    className="min-w-0 flex-1 rounded-lg px-3 py-2 text-xs font-semibold uppercase text-[#2C2C2A]"
+                    style={{ background: "#FFFFFF", border: "1px solid #ECE9E0" }}
+                  />
+                  <button
+                    onClick={handleApplyCode}
+                    disabled={manualStatus === "checking" || !manualCode.trim()}
+                    className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                    style={{ background: "#185FA5" }}
+                  >
+                    {manualStatus === "checking" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    Apply
+                  </button>
+                </div>
+                {manualStatus === "error" && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "#791F1F" }}>
+                    <AlertCircle size={11} /> {manualError}
+                  </div>
+                )}
+                {promo && !manualCode && (
+                  <div className="mt-2 text-[11px] text-[#8C8977]">
+                    You already have {promo.code} ({promo.discountValue}% off) applied automatically — entering a code here will use that one instead.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           <div
             className="mb-4 rounded-xl p-4"
             style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
@@ -206,16 +302,16 @@ export default function FareEstimateScreen({
               <div className="flex justify-between"><span>Base fare</span><span>€{fare.baseFare.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Distance ({route.distanceKm} km)</span><span>€{fare.distanceCost.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Time ({Math.round(route.durationMinutes)} min)</span><span>€{fare.timeCost.toFixed(2)}</span></div>
-              {!promo && fare.discountPercent > 0 && (
+              {!effectivePromo && fare.discountPercent > 0 && (
                 <div className="flex justify-between" style={{ color: "#27500A" }}>
                   <span>Discount ({fare.discountPercent}%)</span>
                   <span>−€{fare.discountAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between"><span>Pre-booking fee</span><span>€{fare.preBookingFee.toFixed(2)}</span></div>
-              {promo && promoDiscountAmount > 0 && (
+              {effectivePromo && promoDiscountAmount > 0 && (
                 <div className="flex justify-between" style={{ color: "#27500A" }}>
-                  <span>Promo {promo.code} ({promo.discountValue}% off — replaces your standard discount)</span>
+                  <span>Promo {effectivePromo.code} ({effectivePromo.discountValue}% off — replaces your standard discount)</span>
                   <span>−€{promoDiscountAmount.toFixed(2)}</span>
                 </div>
               )}
@@ -281,7 +377,7 @@ export default function FareEstimateScreen({
                 tariffPeriod,
                 paymentTiming,
                 depositAmount: paymentTiming === "later" ? payLaterDepositAmount : 0,
-                promoCodeId: promo?.id ?? null,
+                promoCodeId: effectivePromo?.id ?? null,
               })
             }
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"

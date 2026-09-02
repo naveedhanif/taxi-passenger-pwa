@@ -17,7 +17,8 @@ import { supabase } from "./supabaseClient.js";
 import { getDriverOnlineStatus, getDriverPhotos } from "./driverAvailabilityApi.js";
 import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./savedLocationsApi.js";
 import { listRecurringRides, addRecurringRide, toggleRecurringRide, deleteRecurringRide } from "./recurringRidesApi.js";
-import { getActivePromo } from "./promoApi.js";
+import PromoCodesScreen from "./PromoCodesScreen.jsx";
+import { getActivePromo, listMyPromos } from "./promoApi.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -35,6 +36,7 @@ const DEMO_DROPOFF = { lat: 53.4264, lng: -6.2499, address: "Dublin Airport" };
 const SCREENS = [
   { id: "booking", label: "Book a ride" },
   { id: "status", label: "Live tracking" },
+  { id: "promos", label: "Promo codes" },
   { id: "account", label: "Account" },
 ];
 
@@ -297,6 +299,11 @@ export default function App() {
   // this is informational rather than action-required) plus a light
   // vibration on mobile.
   const statusAudioRef = useRef(null);
+  // Same idea, distinct tone — plays when a new promo code becomes
+  // available to this passenger (see the polling effect further
+  // down). A reward-style chime rather than the status update's more
+  // neutral tone, since this is a "you got something" moment.
+  const promoAudioRef = useRef(null);
   // TEMPORARY — diagnostic only, see the debug badge near the bottom of
   // this component's render. Tracks exactly what the last poll attempt
   // did, so it can be screenshotted instead of guessed at.
@@ -340,6 +347,16 @@ export default function App() {
           .catch(() => {
             // Will simply try again on the next tap.
           });
+      }
+      const promoAudio = promoAudioRef.current;
+      if (promoAudio) {
+        promoAudio
+          .play()
+          .then(() => {
+            promoAudio.pause();
+            promoAudio.currentTime = 0;
+          })
+          .catch(() => {});
       }
     }
     document.addEventListener("click", unlockAudio, { once: true });
@@ -829,6 +846,84 @@ export default function App() {
     };
   }, [screen, driverId, customerSession?.accessToken]);
 
+  // Periodically checks for a NEW promo code becoming available —
+  // independent of the fare-screen-only check above, since a passenger
+  // should hear about a new code wherever they currently are, same
+  // reasoning as the status-change polling further up. Only alerts on
+  // a genuine new arrival (same "establish a baseline first, then only
+  // alert on real diffs" pattern as the status polling), not on every
+  // already-known active code every time this reloads.
+  const promoSeenInitializedRef = useRef(false);
+  const promoSeenIdsRef = useRef(new Set());
+  useEffect(() => {
+    if (!driverId) return;
+    promoSeenInitializedRef.current = false;
+    promoSeenIdsRef.current = new Set();
+
+    const storageKey = `taxi_seen_promos_${driverId}_${customerSession?.customer?.id || "guest"}`;
+    try {
+      const persisted = localStorage.getItem(storageKey);
+      if (persisted) {
+        promoSeenIdsRef.current = new Set(JSON.parse(persisted));
+        promoSeenInitializedRef.current = true;
+      }
+    } catch {
+      // Falls back to treating the first check as the baseline below.
+    }
+
+    let cancelledEffect = false;
+    async function checkPromos() {
+      const cs = customerSessionRef.current;
+      const result = await listMyPromos({ driverId, customerSessionToken: cs?.accessToken || null });
+      if (cancelledEffect || result.error) return;
+
+      const activeIds = (result.promos || []).filter((p) => p.status === "active").map((p) => p.id);
+
+      if (promoSeenInitializedRef.current) {
+        const newOnes = activeIds.filter((id) => !promoSeenIdsRef.current.has(id));
+        if (newOnes.length > 0) {
+          const newest = (result.promos || []).find((p) => p.id === newOnes[0]);
+          setStatusAlert({
+            tone: "success",
+            title: "You've got a promo code!",
+            message: newest ? `${newest.discountValue}% off your next ride with code ${newest.code}.` : "Check your Promo codes screen for the details.",
+            viewScreen: "promos",
+          });
+          const promoAudio = promoAudioRef.current;
+          if (promoAudio) {
+            promoAudio.currentTime = 0;
+            promoAudio.play().catch(() => {});
+          }
+          if ("vibrate" in navigator) {
+            try {
+              navigator.vibrate([60, 40, 60]);
+            } catch {
+              // Not supported — ignore.
+            }
+          }
+        }
+      } else {
+        promoSeenInitializedRef.current = true;
+      }
+
+      promoSeenIdsRef.current = new Set(activeIds);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(activeIds));
+      } catch {
+        // Nice-to-have persistence only — doesn't block anything if it fails.
+      }
+    }
+
+    checkPromos();
+    const intervalId = setInterval(checkPromos, 20000);
+    return () => {
+      cancelledEffect = true;
+      clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverId, customerSession?.customer?.id]);
+
+
   const currentLabel = SCREENS.find((s) => s.id === screen)?.label;
 
   function selectScreen(id) {
@@ -1020,6 +1115,7 @@ export default function App() {
 
       <div className="py-6">
         <audio ref={statusAudioRef} src="/status-update-chime.wav" preload="auto" />
+        <audio ref={promoAudioRef} src="/promo-received.wav" preload="auto" />
         {statusAlert && (
           <div
             className="mx-auto mb-4 flex w-full max-w-[400px] items-start gap-3 rounded-xl p-4 text-sm"
@@ -1037,7 +1133,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setStatusAlert(null);
-                    go("status");
+                    go(statusAlert.viewScreen || "status");
                   }}
                   className="text-xs font-semibold underline"
                 >
@@ -1133,6 +1229,8 @@ export default function App() {
 
         {screen === "fare" && (
           <FareEstimateScreen
+            driverId={driverId}
+            customerSessionToken={customerSession?.accessToken || null}
             mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN}
             pickup={formSelection?.pickup ?? DEMO_PICKUP}
             dropoff={formSelection?.dropoff ?? DEMO_DROPOFF}
@@ -1144,6 +1242,14 @@ export default function App() {
             promo={activePromo}
             onConfirm={handleConfirmFare}
             onBack={() => go("booking")}
+          />
+        )}
+
+        {screen === "promos" && (
+          <PromoCodesScreen
+            driverId={driverId}
+            customerSessionToken={customerSession?.accessToken || null}
+            onBack={goBack}
           />
         )}
 
