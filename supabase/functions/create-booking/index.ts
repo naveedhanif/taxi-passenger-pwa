@@ -254,12 +254,12 @@ Deno.serve(async (req) => {
     // pre-any-discount amount, then apply only the promo discount to that.
     const fareBeforeAnyDiscount = Math.round((fare.total + fare.discountAmount) * 100) / 100;
 
-    let promo: { id: string; discount_value: number } | null = null;
+    let promo: { id: string; discount_type: "percent" | "fixed"; discount_value: number } | null = null;
     let promoDiscountAmount = 0;
     if (body.promo_code_id) {
       const { data: promoRow } = await supabase
         .from("promo_codes")
-        .select("id, discount_value, customer_id, driver_id, active, max_uses, uses_count, expires_at")
+        .select("id, discount_type, discount_value, customer_id, driver_id, active, max_uses, uses_count, expires_at")
         .eq("id", body.promo_code_id)
         .single();
 
@@ -275,13 +275,17 @@ Deno.serve(async (req) => {
         (promoRow.customer_id == null || promoRow.customer_id === customerId);
 
       if (isUsable) {
-        promo = { id: promoRow!.id, discount_value: promoRow!.discount_value };
-        // Promo codes are a straight percent-off, applied to the
-        // full pre-discount fare — not the already-tariff-discounted
-        // amount, since the standing discount doesn't apply here at all.
-        promoDiscountAmount = Math.round(
-          Math.min(fareBeforeAnyDiscount * (promo.discount_value / 100), fareBeforeAnyDiscount) * 100
-        ) / 100;
+        promo = { id: promoRow!.id, discount_type: promoRow!.discount_type, discount_value: promoRow!.discount_value };
+        // FIXED BUG: this used to always divide discount_value by 100
+        // as if every promo were a percentage — a driver-created
+        // "€5 off" fixed promo was silently computed as "5% off"
+        // instead, which for a typical fare is a tiny fraction of the
+        // intended discount. Now branches on the promo's real type.
+        const rawDiscount =
+          promo.discount_type === "percent"
+            ? fareBeforeAnyDiscount * (promo.discount_value / 100)
+            : promo.discount_value;
+        promoDiscountAmount = Math.round(Math.min(rawDiscount, fareBeforeAnyDiscount) * 100) / 100;
       }
     }
 

@@ -46,7 +46,7 @@ function PromoCard({ promo }) {
       </div>
 
       <div className="mb-3 text-2xl font-bold" style={{ fontFamily: "'Space Grotesk'", color: isUsable ? "#27500A" : "#8C8977" }}>
-        {promo.discountValue}% off
+        {promo.discountType === "percent" ? `${promo.discountValue}% off` : `€${Number(promo.discountValue).toFixed(2)} off`}
         <span className="ml-1.5 text-xs font-normal text-[#8C8977]" style={{ fontFamily: "Inter" }}>
           your next ride
         </span>

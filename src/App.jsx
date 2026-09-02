@@ -886,7 +886,9 @@ export default function App() {
           setStatusAlert({
             tone: "success",
             title: "You've got a promo code!",
-            message: newest ? `${newest.discountValue}% off your next ride with code ${newest.code}.` : "Check your Promo codes screen for the details.",
+            message: newest
+              ? `${newest.discountType === "percent" ? `${newest.discountValue}% off` : `€${Number(newest.discountValue).toFixed(2)} off`} your next ride with code ${newest.code}.`
+              : "Check your Promo codes screen for the details.",
             viewScreen: "promos",
           });
           const promoAudio = promoAudioRef.current;
@@ -1270,7 +1272,7 @@ export default function App() {
             stripePublishableKey={import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY}
             clientSecret={bookingResult.clientSecret}
             bookingId={bookingResult.bookingId}
-            amount={bookingResult.paymentTiming === "later" ? bookingResult.depositAmount : bookingResult.fare.total}
+            amount={bookingResult.paymentTiming === "later" ? bookingResult.depositAmount : bookingResult.finalTotal}
             paymentTiming={bookingResult.paymentTiming}
             balanceDue={bookingResult.balanceDue}
             onSuccess={() => go("confirmed")}

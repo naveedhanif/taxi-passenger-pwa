@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const SELECT_COLS = "id, code, discount_value, customer_id, active, max_uses, uses_count, expires_at, created_at";
+    const SELECT_COLS = "id, code, discount_type, discount_value, customer_id, active, max_uses, uses_count, expires_at, created_at";
 
     // Broadcast codes + (if signed in) codes targeted at this customer.
     let query = supabase.from("promo_codes").select(SELECT_COLS).eq("driver_id", body.driver_id);
@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
       return {
         id: p.id,
         code: p.code,
+        discountType: p.discount_type,
         discountValue: p.discount_value,
         targeted: p.customer_id != null,
         status,

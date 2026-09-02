@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: promoRow } = await supabase
       .from("promo_codes")
-      .select("id, code, discount_value, customer_id, active, max_uses, uses_count, expires_at")
+      .select("id, code, discount_type, discount_value, customer_id, active, max_uses, uses_count, expires_at")
       .eq("driver_id", body.driver_id)
       .eq("code", body.code.trim().toUpperCase())
       .maybeSingle();
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ promo: { id: promoRow.id, code: promoRow.code, discountValue: promoRow.discount_value } }),
+      JSON.stringify({ promo: { id: promoRow.id, code: promoRow.code, discountType: promoRow.discount_type, discountValue: promoRow.discount_value } }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

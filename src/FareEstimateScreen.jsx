@@ -65,6 +65,12 @@ export default function FareEstimateScreen({
   const [manualStatus, setManualStatus] = useState("idle"); // idle | checking | error
   const [manualError, setManualError] = useState("");
   const effectivePromo = manualPromo || promo;
+  // Fixed-amount promos were previously always labeled "X% off"
+  // regardless of their real type — same root bug as the discount
+  // math above, just in the display text.
+  function formatDiscount(p) {
+    return p.discountType === "percent" ? `${p.discountValue}% off` : `€${Number(p.discountValue).toFixed(2)} off`;
+  }
 
   async function handleApplyCode() {
     if (!manualCode.trim()) return;
@@ -146,9 +152,21 @@ export default function FareEstimateScreen({
   // and compute it off the pre-any-discount amount, not fare.total
   // (which already has the standing discount baked in).
   const fareBeforeAnyDiscount = fare ? Math.round((fare.total + fare.discountAmount) * 100) / 100 : 0;
-  const promoDiscountAmount = fare && effectivePromo
-    ? Math.round(Math.min(fareBeforeAnyDiscount * (effectivePromo.discountValue / 100), fareBeforeAnyDiscount) * 100) / 100
-    : 0;
+  // FIXED BUG: this used to always divide discountValue by 100 as if
+  // every promo were a percentage — a "fixed" euro-amount promo was
+  // silently shown with a far-too-small discount here too, matching
+  // the same bug that existed server-side in create-booking.
+  const promoDiscountAmount =
+    fare && effectivePromo
+      ? Math.round(
+          Math.min(
+            effectivePromo.discountType === "percent"
+              ? fareBeforeAnyDiscount * (effectivePromo.discountValue / 100)
+              : effectivePromo.discountValue,
+            fareBeforeAnyDiscount
+          ) * 100
+        ) / 100
+      : 0;
   const displayTotal = fare ? (effectivePromo ? Math.round((fareBeforeAnyDiscount - promoDiscountAmount) * 100) / 100 : fare.total) : 0;
 
   return (
@@ -242,7 +260,7 @@ export default function FareEstimateScreen({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#27500A" }}>
                   <Tag size={13} />
-                  {manualPromo.code} applied — {manualPromo.discountValue}% off
+                  {manualPromo.code} applied — {formatDiscount(manualPromo)}
                 </div>
                 <button onClick={handleClearManualCode} className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: "#F0EEE7" }}>
                   <X size={11} color="#5F5E5A" />
@@ -286,7 +304,7 @@ export default function FareEstimateScreen({
                 )}
                 {promo && !manualCode && (
                   <div className="mt-2 text-[11px] text-[#8C8977]">
-                    You already have {promo.code} ({promo.discountValue}% off) applied automatically — entering a code here will use that one instead.
+                    You already have {promo.code} ({formatDiscount(promo)}) applied automatically — entering a code here will use that one instead.
                   </div>
                 )}
               </>
@@ -311,7 +329,7 @@ export default function FareEstimateScreen({
               <div className="flex justify-between"><span>Pre-booking fee</span><span>€{fare.preBookingFee.toFixed(2)}</span></div>
               {effectivePromo && promoDiscountAmount > 0 && (
                 <div className="flex justify-between" style={{ color: "#27500A" }}>
-                  <span>Promo {effectivePromo.code} ({effectivePromo.discountValue}% off — replaces your standard discount)</span>
+                  <span>Promo {effectivePromo.code} ({formatDiscount(effectivePromo)} — replaces your standard discount)</span>
                   <span>−€{promoDiscountAmount.toFixed(2)}</span>
                 </div>
               )}
