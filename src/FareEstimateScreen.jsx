@@ -30,6 +30,7 @@ const TARIFF_LABEL = {
  * @param {Array} props.fareRules - driver's fare_rules rows
  * @param {number} props.preBookingFee - driver's pre_booking_fee
  * @param {number} props.payLaterDepositAmount - driver's minimum pay-later deposit
+ * @param {{id:string, code:string, discountType:'percent'|'fixed', discountValue:number}|null} [props.promo] - from get-active-promo; display-only, re-validated server-side
  * @param {function} props.onConfirm - called with the final fare breakdown + payment choice when the driver taps confirm
  * @param {function} props.onBack
  */
@@ -42,6 +43,7 @@ export default function FareEstimateScreen({
   fareRules,
   preBookingFee,
   payLaterDepositAmount,
+  promo = null,
   onConfirm,
   onBack,
 }) {
@@ -103,6 +105,17 @@ export default function FareEstimateScreen({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickup, dropoff, JSON.stringify(stops), scheduledTime, fareRules, preBookingFee, mapboxToken]);
+
+  // Display-only preview — create-booking is the real authority. A
+  // promo code REPLACES the standing per-tariff discount rather than
+  // stacking with it, so when one applies we show only the promo line
+  // and compute it off the pre-any-discount amount, not fare.total
+  // (which already has the standing discount baked in).
+  const fareBeforeAnyDiscount = fare ? Math.round((fare.total + fare.discountAmount) * 100) / 100 : 0;
+  const promoDiscountAmount = fare && promo
+    ? Math.round(Math.min(fareBeforeAnyDiscount * (promo.discountValue / 100), fareBeforeAnyDiscount) * 100) / 100
+    : 0;
+  const displayTotal = fare ? (promo ? Math.round((fareBeforeAnyDiscount - promoDiscountAmount) * 100) / 100 : fare.total) : 0;
 
   return (
     <div
@@ -193,20 +206,26 @@ export default function FareEstimateScreen({
               <div className="flex justify-between"><span>Base fare</span><span>€{fare.baseFare.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Distance ({route.distanceKm} km)</span><span>€{fare.distanceCost.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Time ({Math.round(route.durationMinutes)} min)</span><span>€{fare.timeCost.toFixed(2)}</span></div>
-              {fare.discountPercent > 0 && (
+              {!promo && fare.discountPercent > 0 && (
                 <div className="flex justify-between" style={{ color: "#27500A" }}>
                   <span>Discount ({fare.discountPercent}%)</span>
                   <span>−€{fare.discountAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between"><span>Pre-booking fee</span><span>€{fare.preBookingFee.toFixed(2)}</span></div>
+              {promo && promoDiscountAmount > 0 && (
+                <div className="flex justify-between" style={{ color: "#27500A" }}>
+                  <span>Promo {promo.code} ({promo.discountValue}% off — replaces your standard discount)</span>
+                  <span>−€{promoDiscountAmount.toFixed(2)}</span>
+                </div>
+              )}
             </div>
             {fare.minimumFareApplied && (
               <div className="mt-2 text-[11px] text-[#8C8977]">Minimum fare applied for this trip</div>
             )}
             <div className="mt-3 flex items-center justify-between border-t border-[#ECE9E0] pt-3">
               <span className="text-sm font-medium text-[#2C2C2A]">Total</span>
-              <span className="text-lg font-semibold text-[#2C2C2A]">€{fare.total.toFixed(2)}</span>
+              <span className="text-lg font-semibold text-[#2C2C2A]">€{displayTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -248,7 +267,7 @@ export default function FareEstimateScreen({
             {paymentTiming === "later" && (
               <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "#FAEEDA", color: "#633806" }}>
                 A €{payLaterDepositAmount.toFixed(2)} deposit is charged now to secure your booking. It's
-                subtracted from the fare — you'll owe €{Math.max(fare.total - payLaterDepositAmount, 0).toFixed(2)} more,
+                subtracted from the fare — you'll owe €{Math.max(displayTotal - payLaterDepositAmount, 0).toFixed(2)} more,
                 payable to the driver by cash or card once the trip is complete.
               </div>
             )}
@@ -262,6 +281,7 @@ export default function FareEstimateScreen({
                 tariffPeriod,
                 paymentTiming,
                 depositAmount: paymentTiming === "later" ? payLaterDepositAmount : 0,
+                promoCodeId: promo?.id ?? null,
               })
             }
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
@@ -271,7 +291,7 @@ export default function FareEstimateScreen({
             }}
           >
             {paymentTiming === "now"
-              ? `Confirm & pay €${fare.total.toFixed(2)}`
+              ? `Confirm & pay €${displayTotal.toFixed(2)}`
               : `Confirm & pay deposit €${payLaterDepositAmount.toFixed(2)}`}
             <ArrowRight size={15} />
           </button>

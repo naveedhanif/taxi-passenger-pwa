@@ -17,6 +17,7 @@ import { supabase } from "./supabaseClient.js";
 import { getDriverOnlineStatus, getDriverPhotos } from "./driverAvailabilityApi.js";
 import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./savedLocationsApi.js";
 import { listRecurringRides, addRecurringRide, toggleRecurringRide, deleteRecurringRide } from "./recurringRidesApi.js";
+import { getActivePromo } from "./promoApi.js";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -139,6 +140,10 @@ export default function App() {
   // remembers *why* the passenger went to sign in, so success routes
   // them somewhere sensible instead of always the same place.
   const [customerSession, setCustomerSession] = useState(null); // { userId, accessToken, customer:{id,name,phone,email} } | null
+  // { id, code, discountType, discountValue } | null — looked up fresh
+  // each time the passenger reaches the fare screen, see the effect
+  // below. Display-only; create-booking re-validates it independently.
+  const [activePromo, setActivePromo] = useState(null);
   const [resolvingSession, setResolvingSession] = useState(true);
   const authOriginRef = useRef("account"); // "account" | "post-booking"
 
@@ -808,6 +813,22 @@ export default function App() {
     go("fare");
   }
 
+  // Refreshed every time the passenger reaches the fare screen (not
+  // just once on mount) so a promo that's created/toggled while
+  // they're mid-booking still gets picked up, and so a stale one from
+  // an earlier visit doesn't linger.
+  useEffect(() => {
+    if (screen !== "fare" || !driverId) return;
+    let cancelled = false;
+    (async () => {
+      const result = await getActivePromo({ driverId, customerSessionToken: customerSession?.accessToken || null });
+      if (!cancelled) setActivePromo(result?.promo ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [screen, driverId, customerSession?.accessToken]);
+
   const currentLabel = SCREENS.find((s) => s.id === screen)?.label;
 
   function selectScreen(id) {
@@ -815,7 +836,7 @@ export default function App() {
     setMenuOpen(false);
   }
 
-  async function handleConfirmFare({ paymentTiming } = {}) {
+  async function handleConfirmFare({ paymentTiming, promoCodeId } = {}) {
     setBookingError("");
     setCreatingBooking(true);
 
@@ -835,6 +856,7 @@ export default function App() {
       // the passenger actually has an account, which is why account
       // history could never show real past trips before.
       accessToken: customerSession?.accessToken || null,
+      promoCodeId: promoCodeId || null,
     });
 
     setCreatingBooking(false);
@@ -1119,6 +1141,7 @@ export default function App() {
             fareRules={fareRules}
             preBookingFee={3.0}
             payLaterDepositAmount={payLaterDepositAmount}
+            promo={activePromo}
             onConfirm={handleConfirmFare}
             onBack={() => go("booking")}
           />

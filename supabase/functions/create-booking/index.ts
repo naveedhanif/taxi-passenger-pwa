@@ -74,6 +74,10 @@ interface BookingRequest {
   stops?: { address: string; lat: number; lng: number }[];
   scheduled_time: string; // ISO string
   payment_timing: "now" | "later";
+  // Optional — from get-active-promo's display-only lookup. Re-validated
+  // completely independently here; the client's claim about which promo
+  // applies (or that one applies at all) is never trusted.
+  promo_code_id?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -232,16 +236,74 @@ Deno.serve(async (req) => {
       preBookingFee: driver.pre_booking_fee,
     });
 
+    // ---- Validate + apply a promo code, if one was requested ----
+    // Entirely independent of whatever the client displayed via
+    // get-active-promo — that lookup is a convenience preview only.
+    // A promo either isn't usable (wrong customer, inactive, expired,
+    // used up) or it's silently ignored rather than failing the whole
+    // booking, since by the time this runs the passenger has already
+    // committed to the trip; a promo that quietly stopped being valid
+    // between viewing the fare estimate and confirming shouldn't block
+    // them from booking at all, just from getting the discount.
+    //
+    // IMPORTANT: a promo code REPLACES the driver's standing per-tariff
+    // discount (fare_rules.discount_percent) rather than stacking with
+    // it — this is a deliberate driver-facing rule, not a bug. fare.total
+    // already has that standing discount baked in (see fareCalculator.ts),
+    // so to apply a promo instead we first add it back to recover the
+    // pre-any-discount amount, then apply only the promo discount to that.
+    const fareBeforeAnyDiscount = Math.round((fare.total + fare.discountAmount) * 100) / 100;
+
+    let promo: { id: string; discount_value: number } | null = null;
+    let promoDiscountAmount = 0;
+    if (body.promo_code_id) {
+      const { data: promoRow } = await supabase
+        .from("promo_codes")
+        .select("id, discount_value, customer_id, driver_id, active, max_uses, uses_count, expires_at")
+        .eq("id", body.promo_code_id)
+        .single();
+
+      const isUsable =
+        promoRow &&
+        promoRow.driver_id === body.driver_id &&
+        promoRow.active === true &&
+        (promoRow.expires_at == null || new Date(promoRow.expires_at) > new Date()) &&
+        (promoRow.max_uses == null || promoRow.uses_count < promoRow.max_uses) &&
+        // Broadcast (customer_id null) is usable by anyone; a targeted
+        // code only by the exact customer it was made for — and a
+        // guest (customerId null) can never redeem a targeted code.
+        (promoRow.customer_id == null || promoRow.customer_id === customerId);
+
+      if (isUsable) {
+        promo = { id: promoRow!.id, discount_value: promoRow!.discount_value };
+        // Promo codes are a straight percent-off, applied to the
+        // full pre-discount fare — not the already-tariff-discounted
+        // amount, since the standing discount doesn't apply here at all.
+        promoDiscountAmount = Math.round(
+          Math.min(fareBeforeAnyDiscount * (promo.discount_value / 100), fareBeforeAnyDiscount) * 100
+        ) / 100;
+      }
+    }
+
+    // No promo: unchanged from before — fare.total already has the
+    // standing discount applied. Promo present: standing discount is
+    // dropped and only the promo discount counts.
+    const discountedTotal = promo
+      ? Math.round((fareBeforeAnyDiscount - promoDiscountAmount) * 100) / 100
+      : fare.total;
+
+
     // ---- Work out what's actually charged now vs owed later ----
     const payLater = body.payment_timing === "later";
     const depositAmount = payLater ? Number(driver.pay_later_deposit_amount) : 0;
-    const chargeNowAmount = payLater ? depositAmount : fare.total;
-    const balanceDue = payLater ? Math.round((fare.total - depositAmount) * 100) / 100 : null;
+    const chargeNowAmount = payLater ? depositAmount : discountedTotal;
+    const balanceDue = payLater ? Math.round((discountedTotal - depositAmount) * 100) / 100 : null;
 
-    if (payLater && depositAmount >= fare.total) {
-      // Edge case: a very short/cheap trip where the deposit would cover
-      // (or exceed) the whole fare. Don't charge more than the fare, and
-      // don't create a confusing zero/negative balance_due.
+    if (payLater && depositAmount >= discountedTotal) {
+      // Edge case: a very short/cheap trip (or a steep discount) where
+      // the deposit would cover (or exceed) the whole fare. Don't
+      // charge more than the fare, and don't create a confusing
+      // zero/negative balance_due.
       return jsonError(
         "This trip's estimated fare is too low for pay-later — please choose pay now instead",
         400
@@ -312,6 +374,8 @@ Deno.serve(async (req) => {
         // estimate and the driver never marks it complete.
         estimated_duration_minutes: durationMinutes,
         estimated_fare: fare.total,
+        promo_code_id: promo?.id ?? null,
+        discount_amount: promoDiscountAmount,
         // Not yet visible to the driver and doesn't lock availability —
         // becomes "pending" only once confirm-booking-payment verifies
         // with Stripe that payment actually succeeded. See the
@@ -356,12 +420,27 @@ Deno.serve(async (req) => {
       metadata: { booking_id: booking.id, payment_purpose: payLater ? "pay_later_deposit" : "full_fare" },
     });
 
+    // Fire-and-forget: bump the promo's usage counter now that it's
+    // actually been used. Doesn't fail or roll back the booking if
+    // this errors — the booking and the charge have already both
+    // genuinely succeeded, and worst case a promo's max_uses is
+    // enforced slightly loosely under this specific failure mode
+    // rather than the passenger losing an already-paid-for booking.
+    if (promo) {
+      const { error: usageError } = await supabase.rpc("increment_promo_uses", { p_promo_id: promo.id });
+      if (usageError) {
+        console.error("Failed to increment promo uses_count (non-fatal):", usageError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         bookingId: booking.id,
         accessToken: booking.access_token,
         clientSecret: paymentIntent.client_secret,
         fare,
+        discountAmount: promoDiscountAmount,
+        finalTotal: discountedTotal,
         distanceKm,
         durationMinutes,
         tariffPeriod,

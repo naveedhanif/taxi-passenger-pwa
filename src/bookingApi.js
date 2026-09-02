@@ -21,9 +21,10 @@
  * @param {Date} params.scheduledTime
  * @param {"now"|"later"} params.paymentTiming
  * @param {string|null} params.accessToken - the signed-in user's Supabase session token, if any; omit for guest bookings
- * @returns {Promise<{bookingId, accessToken, clientSecret, fare, distanceKm, durationMinutes, tariffPeriod, paymentTiming, depositAmount, balanceDue} | {error: string}>}
+ * @param {string|null} [params.promoCodeId] - from get-active-promo's display-only lookup; re-validated server-side regardless
+ * @returns {Promise<{bookingId, accessToken, clientSecret, fare, discountAmount, finalTotal, distanceKm, durationMinutes, tariffPeriod, paymentTiming, depositAmount, balanceDue} | {error: string}>}
  */
-export async function createBooking({ driverId, passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, scheduledTime, paymentTiming, accessToken }) {
+export async function createBooking({ driverId, passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, scheduledTime, paymentTiming, accessToken, promoCodeId }) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -51,6 +52,7 @@ export async function createBooking({ driverId, passengerName, passengerPhone, p
       stops: (stops || []).map((s) => ({ address: s.address, lat: s.lat, lng: s.lng })),
       scheduled_time: scheduledTime.toISOString(),
       payment_timing: paymentTiming || "now",
+      promo_code_id: promoCodeId || null,
     }),
   });
 
