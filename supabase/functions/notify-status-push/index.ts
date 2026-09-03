@@ -7,6 +7,13 @@
 // real, closed-app-reaching notification for the stages that actually
 // matter to them — not every status, see STATUS_MESSAGES below.
 //
+// Also where the referral program's SECOND reward happens: the
+// referee's welcome discount is granted immediately at signup (see
+// signup-customer/index.ts), but the referrer only gets rewarded once
+// their friend's first ride genuinely completes — this is the moment
+// that's actually true, so it's handled here rather than at signup or
+// anywhere earlier that could be gamed by an account that never rides.
+//
 // Reads the booking's CURRENT status from the database rather than
 // trusting anything the client sends about what it changed it to —
 // same "never trust the client's claim" reasoning as everywhere else,
@@ -58,7 +65,7 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (userError || !userData?.user) return jsonError("Not signed in", 401);
 
-    const { data: driver } = await supabase.from("drivers").select("id, user_id").eq("id", body.driver_id).single();
+    const { data: driver } = await supabase.from("drivers").select("id, user_id, referral_reward_percent").eq("id", body.driver_id).single();
     if (!driver || driver.user_id !== userData.user.id) return jsonError("Not authorized for this driver account", 403);
 
     const { data: booking } = await supabase
@@ -78,6 +85,61 @@ Deno.serve(async (req) => {
     // No message for this status, or a guest booking (no customer_id
     // to push to) — both are expected, non-error outcomes.
 
+    // ---- Referral reward, only on a genuine trip completion ----
+    if (booking.status === "completed" && booking.customer_id) {
+      try {
+        const { data: referral } = await supabase
+          .from("referrals")
+          .select("id, referrer_customer_id, referrer_rewarded")
+          .eq("referee_customer_id", booking.customer_id)
+          .eq("referrer_rewarded", false)
+          .maybeSingle();
+
+        if (referral) {
+          // Confirm this is genuinely their FIRST completed ride —
+          // defence in depth in case this function ever runs twice for
+          // the same transition (a retried request, for instance).
+          const { count } = await supabase
+            .from("bookings")
+            .select("id", { count: "exact", head: true })
+            .eq("customer_id", booking.customer_id)
+            .eq("driver_id", body.driver_id)
+            .eq("status", "completed");
+
+          if ((count ?? 0) <= 1) {
+            const { error: promoError } = await supabase.from("promo_codes").insert({
+              driver_id: body.driver_id,
+              code: `REFERRAL-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+              discount_type: "percent",
+              discount_value: driver.referral_reward_percent ?? 10,
+              customer_id: referral.referrer_customer_id,
+              max_uses: 1,
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+
+            if (!promoError) {
+              await supabase.from("referrals").update({ referrer_rewarded: true }).eq("id", referral.id);
+              sendPushToTarget(
+                supabase,
+                { type: "customer", customerId: referral.referrer_customer_id },
+                {
+                  title: "Your referral reward is ready",
+                  body: `Your friend completed their first ride — you've earned ${driver.referral_reward_percent ?? 10}% off your next trip.`,
+                  url: "/?screen=account",
+                }
+              );
+            } else {
+              console.error("notify-status-push: referral reward promo insert failed:", promoError.message);
+            }
+          }
+        }
+      } catch (err) {
+        // Never lets a referral-reward hiccup affect the status push
+        // above, which has already succeeded by this point.
+        console.error("notify-status-push: referral reward handling failed (non-fatal):", err);
+      }
+    }
+
     return new Response(JSON.stringify({ sent }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     console.error("notify-status-push error:", err);
@@ -88,3 +150,4 @@ Deno.serve(async (req) => {
 function jsonError(message: string, status: number) {
   return new Response(JSON.stringify({ error: message }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
+

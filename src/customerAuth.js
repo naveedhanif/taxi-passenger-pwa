@@ -15,7 +15,7 @@ import { supabase } from "./supabaseClient";
  * exactly; first real test is an actual signup in a running browser.
  */
 
-export async function signUpCustomer({ email, password, name, phone, driverId }) {
+export async function signUpCustomer({ email, password, name, phone, driverId, referralCode }) {
   const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
 
   if (authError) {
@@ -41,7 +41,7 @@ export async function signUpCustomer({ email, password, name, phone, driverId })
     };
   }
 
-  const signupResult = await ensureCustomerRecord({ userId: authData.user.id, email, name, phone, driverId });
+  const signupResult = await ensureCustomerRecord({ userId: authData.user.id, email, name, phone, driverId, referralCode });
 
   if (signupResult.error) {
     return { customerId: null, error: signupResult.error };
@@ -79,7 +79,7 @@ export async function signUpCustomer({ email, password, name, phone, driverId })
  * stuck with a real Auth user but a missing customers row from before
  * this fix existed.
  */
-export async function ensureCustomerRecord({ userId, email, name, phone, driverId }) {
+export async function ensureCustomerRecord({ userId, email, name, phone, driverId, referralCode }) {
   return fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-customer`, {
     method: "POST",
     headers: {
@@ -93,6 +93,7 @@ export async function ensureCustomerRecord({ userId, email, name, phone, driverI
       name: name || null,
       phone: phone || null,
       driver_id: driverId,
+      referral_code: referralCode || null,
     }),
   }).then((r) => r.json());
 }

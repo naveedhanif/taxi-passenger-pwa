@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Mail, Lock, User, ArrowRight, AlertCircle, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, AlertCircle, ArrowLeft, Gift } from "lucide-react";
 import { signUpCustomer, signInCustomer } from "./customerAuth";
 
 function useGoogleFont() {
@@ -34,14 +34,16 @@ function Field({ icon: Icon, ...props }) {
  * @param {string} props.driverName - shown in the header, e.g. "John's Taxi"
  * @param {function} props.onAuthSuccess - called with { customerId } or { userId } once done
  * @param {function} props.onBack
+ * @param {string} [props.initialReferralCode] - pre-fills the referral field from a ?ref= link, if the passenger arrived via one
  */
-export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess, onBack }) {
+export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess, onBack, initialReferralCode = "" }) {
   useGoogleFont();
   const [mode, setMode] = useState("signup"); // "signup" | "signin"
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState(initialReferralCode);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
@@ -52,7 +54,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
     setSubmitting(true);
 
     if (mode === "signup") {
-      const result = await signUpCustomer({ email, password, name, phone, driverId });
+      const result = await signUpCustomer({ email, password, name, phone, driverId, referralCode: referralCode.trim() || null });
       setSubmitting(false);
       if (result.error) {
         setErrorMessage(result.error);
@@ -126,6 +128,15 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         )}
         <Field icon={Mail} type="email" placeholder="Email address" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <Field icon={Lock} type="password" placeholder="Password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+        {mode === "signup" && (
+          <Field
+            icon={Gift}
+            type="text"
+            placeholder="Referral code (optional)"
+            value={referralCode}
+            onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+          />
+        )}
 
         {errorMessage && (
           <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>

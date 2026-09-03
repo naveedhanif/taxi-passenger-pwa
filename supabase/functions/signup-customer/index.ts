@@ -40,6 +40,11 @@ interface RequestBody {
   name?: string | null;
   phone?: string | null;
   driver_id: string;
+  // Optional — a code another of this driver's customers shared. Only
+  // ever applied on a genuine brand-new signup below, never on the
+  // idempotent self-heal/repeat-call path, so re-submitting an
+  // existing account never retroactively creates a referral.
+  referral_code?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -139,8 +144,59 @@ Deno.serve(async (req) => {
       return jsonError(`Couldn't create account: ${insertError?.message || "unknown error"}`, 500);
     }
 
+    // ---- Referral, if a code was entered ----
+    // A bad/expired/typo'd code is never a reason to fail the whole
+    // signup — the account above already exists regardless. Silently
+    // skips (with a log) rather than erroring the passenger out of an
+    // account they just successfully created over a promo code detail.
+    let referralApplied = false;
+    if (body.referral_code && body.referral_code.trim()) {
+      try {
+        const { data: referrer } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("driver_id", body.driver_id)
+          .eq("referral_code", body.referral_code.trim().toUpperCase())
+          .maybeSingle();
+
+        if (referrer) {
+          const { data: driver } = await supabase.from("drivers").select("referral_reward_percent").eq("id", body.driver_id).single();
+          const rewardPercent = driver?.referral_reward_percent ?? 10;
+
+          const { error: referralInsertError } = await supabase.from("referrals").insert({
+            driver_id: body.driver_id,
+            referrer_customer_id: referrer.id,
+            referee_customer_id: customerRow.id,
+          });
+
+          if (!referralInsertError) {
+            // The new customer's own welcome discount — a separate
+            // promo_codes row, same table driver-created promos live
+            // in, just targeted at this one customer and auto-created
+            // rather than driver-made. Reasonable 30-day window so it
+            // doesn't sit unused indefinitely, not something the
+            // passenger explicitly asked for a specific value on.
+            await supabase.from("promo_codes").insert({
+              driver_id: body.driver_id,
+              code: `WELCOME-${randomSuffix()}`,
+              discount_type: "percent",
+              discount_value: rewardPercent,
+              customer_id: customerRow.id,
+              max_uses: 1,
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+            referralApplied = true;
+          } else {
+            console.warn("signup-customer: referral row insert failed (non-fatal):", referralInsertError.message);
+          }
+        }
+      } catch (err) {
+        console.warn("signup-customer: referral handling failed (non-fatal):", err);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ customerId: customerRow.id }),
+      JSON.stringify({ customerId: customerRow.id, referralApplied }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
@@ -148,6 +204,10 @@ Deno.serve(async (req) => {
     return jsonError(err instanceof Error ? err.message : "Unexpected error", 500);
   }
 });
+
+function randomSuffix(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
 
 function jsonError(message: string, status: number) {
   return new Response(JSON.stringify({ error: message }), {

@@ -146,6 +146,7 @@ export default function App() {
   // each time the passenger reaches the fare screen, see the effect
   // below. Display-only; create-booking re-validates it independently.
   const [activePromo, setActivePromo] = useState(null);
+  const [referralCodeFromUrl, setReferralCodeFromUrl] = useState("");
   const [resolvingSession, setResolvingSession] = useState(true);
   const authOriginRef = useRef("account"); // "account" | "post-booking"
 
@@ -700,6 +701,13 @@ export default function App() {
         setIsSharedView(true);
         go("status");
       }
+      // A referral link — see referralApi.js/AccountHistoryScreen.jsx's
+      // "Refer a friend" share button, which builds a link in this
+      // shape. Just pre-fills the signup form's referral field; still
+      // has to go through the normal signup flow, nothing automatic
+      // happens from the URL alone.
+      const refCode = params.get("ref");
+      if (refCode) setReferralCodeFromUrl(refCode.toUpperCase());
     })();
 
     return () => {
@@ -1310,6 +1318,7 @@ export default function App() {
           <CustomerAuthScreen
             driverId={driverId}
             driverName={businessName}
+            initialReferralCode={referralCodeFromUrl}
             onAuthSuccess={handleAuthSuccess}
             onBack={goBack}
           />
