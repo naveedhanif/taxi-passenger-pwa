@@ -10,8 +10,11 @@ const POLL_INTERVAL_MS = 6000;
  * @param {string|null} [props.guestAccessToken]
  * @param {string|null} [props.customerSessionToken]
  * @param {"driver"|"passenger"} props.selfRole - which side of the chat this instance is rendering for, purely for message alignment styling
+ * @param {function} [props.onNewMessage] - fires on a genuinely new incoming message from the other party, same trigger as the sound — lets a parent show an unread indicator when this panel is embedded somewhere collapsed/hidden (e.g. behind a chat icon) rather than always visible
+ * @param {boolean} [props.hideHeader] - suppresses the built-in "Messages" header bar, for when a parent (e.g. a bottom sheet) already shows its own header
+ * @param {string} [props.maxListHeight] - CSS max-height for the scrollable message list; defaults to the original compact inline sizing
  */
-export default function ChatPanel({ bookingId, guestAccessToken, customerSessionToken, selfRole }) {
+export default function ChatPanel({ bookingId, guestAccessToken, customerSessionToken, selfRole, onNewMessage, hideHeader = false, maxListHeight = "13rem" }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -30,6 +33,11 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
   // booking-status notifications elsewhere in this app.
   const knownIdsRef = useRef(new Set());
   const hasLoadedOnceRef = useRef(false);
+  // Kept fresh every render without needing onNewMessage in the poll
+  // effect's deps — a parent passing a fresh arrow function each render
+  // (the common case) would otherwise restart the 6s interval constantly.
+  const onNewMessageRef = useRef(onNewMessage);
+  onNewMessageRef.current = onNewMessage;
   const otherRole = selfRole === "driver" ? "passenger" : "driver";
 
   // Mobile audio unlock — same reasoning as the status-update chime:
@@ -88,6 +96,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
               // Not supported — ignore.
             }
           }
+          onNewMessageRef.current?.();
         }
       }
       knownIdsRef.current = new Set(fetched.map((m) => m.id));
@@ -130,10 +139,12 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
   return (
     <div className="rounded-xl" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
       <audio ref={audioRef} src="/message-pop.wav" preload="auto" />
-      <div className="flex items-center gap-2 border-b border-[#ECE9E0] px-3.5 py-2.5 text-xs font-semibold text-[#5F5E5A]">
-        <MessageCircle size={13} /> Messages
-      </div>
-      <div ref={scrollRef} className="max-h-52 space-y-2 overflow-y-auto p-3">
+      {!hideHeader && (
+        <div className="flex items-center gap-2 border-b border-[#ECE9E0] px-3.5 py-2.5 text-xs font-semibold text-[#5F5E5A]">
+          <MessageCircle size={13} /> Messages
+        </div>
+      )}
+      <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ maxHeight: maxListHeight }}>
         {!loaded ? (
           <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[#8C8977]">
             <Loader2 size={12} className="animate-spin" /> Loading…

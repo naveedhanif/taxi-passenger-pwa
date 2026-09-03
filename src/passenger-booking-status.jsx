@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, MessageSquare, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check } from "lucide-react";
 import { getBookingStatus, cancelBooking } from "./bookingStatusApi.js";
 import { submitReview } from "./reviewApi.js";
 import { createTipPayment } from "./tipApi.js";
@@ -209,6 +209,16 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   const [creatingTipIntent, setCreatingTipIntent] = useState(false);
   const [tipSetupError, setTipSetupError] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
+  // Chat now lives behind a tap-to-open bottom sheet instead of always
+  // being expanded inline — keeps the main tracking screen focused,
+  // matching the reference layout. ChatPanel itself stays mounted at
+  // all times regardless of chatOpen (see the render below) so its 6s
+  // poll — and the sound/vibrate it triggers — keeps running even
+  // while the sheet is visually closed.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const chatOpenRef = useRef(chatOpen);
+  chatOpenRef.current = chatOpen;
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -502,40 +512,59 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
               </div>
             </div>
           </div>
-          {phoneLinks && (
-            <div className="flex gap-2">
-              <a
-                href={`tel:${phoneLinks.tel}`}
-                className="flex h-11 w-11 items-center justify-center rounded-full"
-                style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
-                aria-label="Call driver"
+          <div className="flex items-center gap-2">
+            {!isDone && !isCanceled && !isSharedView && (
+              <button
+                onClick={() => {
+                  setChatOpen(true);
+                  setHasUnreadChat(false);
+                }}
+                className="relative flex h-11 w-11 items-center justify-center rounded-full"
+                style={{ background: "#185FA5" }}
+                aria-label="Chat with driver"
               >
-                <Phone size={14} color="#185FA5" />
-              </a>
-              <a
-                href={`https://wa.me/${phoneLinks.whatsapp}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-11 w-11 items-center justify-center rounded-full"
-                style={{ background: "#25D366" }}
-                aria-label="WhatsApp driver"
-              >
-                <MessageCircle size={14} color="#FFFFFF" />
-              </a>
-            </div>
-          )}
+                <MessageSquare size={14} color="#FFFFFF" />
+                {hasUnreadChat && (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#FBFAF6]"
+                    style={{ background: "#D9534F" }}
+                  />
+                )}
+              </button>
+            )}
+            {phoneLinks && (
+              <>
+                <a
+                  href={`tel:${phoneLinks.tel}`}
+                  className="flex h-11 w-11 items-center justify-center rounded-full"
+                  style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                  aria-label="Call driver"
+                >
+                  <Phone size={14} color="#185FA5" />
+                </a>
+                <a
+                  href={`https://wa.me/${phoneLinks.whatsapp}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-11 w-11 items-center justify-center rounded-full"
+                  style={{ background: "#25D366" }}
+                  aria-label="WhatsApp driver"
+                >
+                  <MessageCircle size={14} color="#FFFFFF" />
+                </a>
+              </>
+            )}
+          </div>
         </EmbossCard>
       )}
 
-      {/* In-app chat — an addition to call/WhatsApp above, not a
-          replacement. Only shown while the trip is still active (not
-          done/cancelled), matching what actually needs live back-and-
-          forth communication. */}
-      {!isDone && !isCanceled && !isSharedView && (
-        <div className="mb-4">
-          <ChatPanel bookingId={bookingId} guestAccessToken={guestAccessToken} customerSessionToken={customerSessionToken} selfRole="passenger" />
-        </div>
-      )}
+      {/* In-app chat now lives in a tap-to-open bottom sheet (triggered
+          by the chat icon in the driver card above) instead of being
+          permanently expanded here — see the sheet render near the end
+          of this component. ChatPanel is mounted unconditionally there
+          (not just when the sheet is open) so its polling — and the
+          sound/vibrate/unread-dot it can trigger — keeps working
+          whether or not the passenger currently has the sheet open. */}
 
       {/* Trip details */}
       <EmbossCard className="mb-4 p-4">
@@ -771,6 +800,70 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           Your driver is already on the way — contact them directly above to cancel.
         </div>
       ) : null}
+
+      {/* Chat bottom sheet — ChatPanel is mounted unconditionally
+          whenever the trip is active, regardless of chatOpen, purely so
+          its 6s poll (and the sound/vibrate/unread-dot it triggers)
+          keeps running while the sheet is visually closed. Only the
+          sheet's position/opacity/backdrop respond to chatOpen. */}
+      {!isDone && !isCanceled && !isSharedView && (
+        <>
+          <div
+            onClick={() => setChatOpen(false)}
+            className="fixed inset-0 z-40 bg-black/40"
+            style={{
+              opacity: chatOpen ? 1 : 0,
+              pointerEvents: chatOpen ? "auto" : "none",
+              transition: "opacity 200ms ease",
+            }}
+            aria-hidden={!chatOpen}
+          />
+          <div
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-[400px] flex-col rounded-t-2xl"
+            style={{
+              background: "#F7F7F5",
+              boxShadow: "0 -8px 24px rgba(44,44,42,0.18)",
+              maxHeight: "80vh",
+              transform: chatOpen ? "translateY(0)" : "translateY(100%)",
+              transition: "transform 260ms ease",
+            }}
+            role="dialog"
+            aria-label="Chat with driver"
+            aria-hidden={!chatOpen}
+          >
+            <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full" style={{ background: "#E4E2DA" }} />
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
+                <MessageSquare size={15} color="#185FA5" />
+                Chat with {driver?.businessName || "your driver"}
+              </div>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full"
+                style={{ background: "#F0EEE7" }}
+                aria-label="Close chat"
+              >
+                <X size={14} color="#5F5E5A" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <ChatPanel
+                bookingId={bookingId}
+                guestAccessToken={guestAccessToken}
+                customerSessionToken={customerSessionToken}
+                selfRole="passenger"
+                hideHeader
+                maxListHeight="55vh"
+                onNewMessage={() => {
+                  // Only flag unread if the sheet isn't the thing the
+                  // passenger is already looking at.
+                  if (!chatOpenRef.current) setHasUnreadChat(true);
+                }}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
