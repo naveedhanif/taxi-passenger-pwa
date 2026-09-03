@@ -42,6 +42,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
+import { getDriverAvailability } from "../_shared/driverAvailability.ts";
 import {
   getTariffPeriod,
   calculateFare,
@@ -136,6 +137,24 @@ Deno.serve(async (req) => {
     }
     if (!driver.stripe_connect_onboarded || !driver.stripe_connect_account_id) {
       return jsonError("This driver hasn't finished payment setup yet", 400);
+    }
+
+    // Server-side re-check of the same online/schedule/break signal the
+    // passenger app already checks via get-driver-availability before
+    // showing the booking form — that earlier read could be stale by
+    // the time this request actually lands (driver went offline, took
+    // a break, or a schedule window just ended in between). This
+    // wasn't previously re-verified here at all; only busy-right-now
+    // (the slot-conflict check below) was. KNOWN CARRIED-OVER
+    // LIMITATION: like the client-side check it mirrors, this looks at
+    // the driver's CURRENT online/schedule/break state regardless of
+    // how far in the future body.scheduled_time actually is — a driver
+    // who's merely offline/on-break right now still blocks a booking
+    // for tomorrow, which may not be the ideal behavior but matches
+    // what already existed client-side rather than silently changing it.
+    const availability = await getDriverAvailability(supabase, body.driver_id);
+    if (!availability.isOnline) {
+      return jsonError("This driver isn't currently accepting bookings", 400);
     }
 
     // ---- Availability check: reject only if the driver has a CONFLICTING trip ----

@@ -131,6 +131,7 @@ export default function App() {
   // not working today is a different situation from one who's mid-trip
   // right now, and deserves a different message.
   const [isDriverOnline, setIsDriverOnline] = useState(true);
+  const [driverBreakUntil, setDriverBreakUntil] = useState(null);
   const [driverPhotoUrl, setDriverPhotoUrl] = useState(null);
   const [vehiclePhotoUrl, setVehiclePhotoUrl] = useState(null);
 
@@ -744,7 +745,8 @@ export default function App() {
 
       if (cancelled) return;
 
-      setIsDriverOnline(onlineStatus);
+      setIsDriverOnline(onlineStatus.isOnline);
+      setDriverBreakUntil(onlineStatus.breakUntil);
       setDriverPhotoUrl(photos.driverPhotoUrl);
       setVehiclePhotoUrl(photos.vehiclePhotoUrl);
       if (!vehicleRes.error) setVehicle(vehicleRes.data);
@@ -1163,7 +1165,10 @@ export default function App() {
 
         {!isDriverOnline && !driverDataError && screen === "booking" && (
           <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#F1EFE8", color: "#2C2C2A" }}>
-            <AlertCircle size={16} /> {businessName || "This driver"} isn't taking bookings today — please check back another time.
+            <AlertCircle size={16} />
+            {driverBreakUntil
+              ? `${businessName || "This driver"} is on a short break — back around ${new Date(driverBreakUntil).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}.`
+              : `${businessName || "This driver"} isn't taking bookings today — please check back another time.`}
           </div>
         )}
 

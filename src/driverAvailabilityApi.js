@@ -1,11 +1,13 @@
 /**
  * Calls the get-driver-availability Edge Function — whether the driver
- * has manually marked themselves online/offline for the day. Separate
- * from public_driver_profiles.is_available, which reflects "busy with
- * an active trip right now" rather than "not working today at all."
+ * has manually marked themselves online/offline for the day, is
+ * outside their working-hours schedule, or is on a short break.
+ * Separate from public_driver_profiles.is_available, which reflects
+ * "busy with an active trip right now" rather than "not working today
+ * at all."
  *
  * @param {string} driverId
- * @returns {Promise<boolean>} defaults to true (online) if the check fails, so a transient error never wrongly hides a driver who's actually working
+ * @returns {Promise<{isOnline: boolean, breakUntil: string|null}>} defaults to online (true) if the check fails, so a transient error never wrongly hides a driver who's actually working
  */
 export async function getDriverOnlineStatus(driverId) {
   try {
@@ -22,10 +24,10 @@ export async function getDriverOnlineStatus(driverId) {
       body: JSON.stringify({ driver_id: driverId }),
     });
     const data = await response.json();
-    if (!response.ok) return true;
-    return data.isOnline !== false;
+    if (!response.ok) return { isOnline: true, breakUntil: null };
+    return { isOnline: data.isOnline !== false, breakUntil: data.breakUntil || null };
   } catch {
-    return true;
+    return { isOnline: true, breakUntil: null };
   }
 }
 
