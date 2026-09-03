@@ -159,6 +159,19 @@ function RecurringToggle({ pickupCoords, dropoffCoords, time, onMakeRecurring })
   );
 }
 
+// A booking needs some real lead time — "right now, this exact minute"
+// isn't realistic for a driver to actually receive and act on. Also
+// used to stop a passenger from picking a date/time that's already
+// passed entirely (native <input type="date"/"time"> `min` attributes
+// help visually, but aren't reliably enforced by every mobile date
+// picker, so this is re-checked explicitly in handleSubmit too, and
+// again server-side in create-booking — never trust the client alone).
+const MIN_BOOKING_LEAD_MINUTES = 10;
+
+function minBookableDate() {
+  return new Date(Date.now() + MIN_BOOKING_LEAD_MINUTES * 60000);
+}
+
 function EmbossField({ icon: Icon, label, trailing, ...props }) {
   return (
     <div>
@@ -445,6 +458,11 @@ export default function PassengerBooking({
     }
     if (!date || !time) {
       setFormError("Choose a date and time");
+      return;
+    }
+    const requestedDateTime = new Date(`${date}T${time}`);
+    if (isNaN(requestedDateTime.getTime()) || requestedDateTime < minBookableDate()) {
+      setFormError("Please choose a time at least a few minutes from now — that time has already passed.");
       return;
     }
     if (!slotAvailable) {
@@ -858,8 +876,27 @@ export default function PassengerBooking({
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <EmbossField icon={Calendar} label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <EmbossField icon={Clock} label="Time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            <EmbossField
+              icon={Calendar}
+              label="Date"
+              type="date"
+              value={date}
+              min={minBookableDate().toISOString().slice(0, 10)}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <EmbossField
+              icon={Clock}
+              label="Time"
+              type="time"
+              value={time}
+              // A `min` on the time input only makes sense when the
+              // selected date IS today — an earlier time on a future
+              // date is perfectly valid. Native browser support for
+              // combining date+time min varies, hence the explicit
+              // recheck in handleSubmit below regardless.
+              min={date === minBookableDate().toISOString().slice(0, 10) ? minBookableDate().toTimeString().slice(0, 5) : undefined}
+              onChange={(e) => setTime(e.target.value)}
+            />
           </div>
           {checkingSlot && (
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#8C8977]">
