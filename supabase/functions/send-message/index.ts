@@ -28,6 +28,7 @@
 // Required secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (auto-provided)
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { sendPushToTarget } from "../_shared/pushSender.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,6 +104,28 @@ Deno.serve(async (req) => {
       .select("id, sender_role, body, created_at")
       .single();
     if (insertError) return jsonError(insertError.message, 500);
+
+    // Push the OTHER party — the sender obviously already knows what
+    // they just sent. Complements the existing 6s-poll in-app sound;
+    // this is what reaches them if the app is closed/backgrounded.
+    const preview = body.body.trim().slice(0, 120);
+    if (senderRole === "driver") {
+      if (booking.customer_id) {
+        sendPushToTarget(
+          supabase,
+          { type: "customer", customerId: booking.customer_id },
+          { title: "New message from your driver", body: preview, url: "/?screen=status" }
+        );
+      }
+      // Guest passengers have no persistent subscription — the in-app
+      // chat sound is the only alert available to them today.
+    } else {
+      sendPushToTarget(
+        supabase,
+        { type: "driver", driverId: booking.driver_id },
+        { title: "New message from passenger", body: preview, url: "/?screen=bookings" }
+      );
+    }
 
     return new Response(JSON.stringify({ message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -30,6 +30,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
+import { sendPushToTarget } from "../_shared/pushSender.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,7 +59,7 @@ Deno.serve(async (req) => {
 
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
-      .select("id, status, payment_timing, stripe_payment_intent_id, deposit_stripe_payment_intent_id")
+      .select("id, status, driver_id, pickup_address, payment_timing, stripe_payment_intent_id, deposit_stripe_payment_intent_id")
       .eq("id", body.booking_id)
       .single();
 
@@ -112,6 +113,18 @@ Deno.serve(async (req) => {
     if (updateError) {
       return jsonError(`Payment succeeded but failed to update booking: ${updateError.message}`, 500);
     }
+
+    // Real push — reaches the driver even if their app is closed or
+    // the phone is locked, unlike the existing Realtime toast/sound in
+    // useNewBookingNotifications.ts, which only fires while the driver
+    // app tab is actually open. Both now cover this same moment
+    // together: Realtime for "app open right now", push for everything
+    // else. Fire-and-forget — never blocks the booking response.
+    sendPushToTarget(
+      supabase,
+      { type: "driver", driverId: booking.driver_id },
+      { title: "New ride request", body: `Pickup: ${booking.pickup_address}`, url: "/?screen=bookings" }
+    );
 
     return new Response(
       JSON.stringify({ confirmed: true, status: "pending" }),

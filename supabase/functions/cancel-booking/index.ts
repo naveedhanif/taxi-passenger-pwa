@@ -33,6 +33,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
+import { sendPushToTarget } from "../_shared/pushSender.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -167,6 +168,27 @@ Deno.serve(async (req) => {
     const { error: updateError } = await supabase.from("bookings").update(updatePayload).eq("id", booking.id);
     if (updateError) {
       return jsonError(`Cancelled but failed to update booking record: ${updateError.message}`, 500);
+    }
+
+    // Push whoever DIDN'T cancel — the party that cancelled already
+    // knows, obviously. Fire-and-forget, never blocks this response.
+    if (authorizedAs === "driver") {
+      if (booking.customer_id) {
+        sendPushToTarget(
+          supabase,
+          { type: "customer", customerId: booking.customer_id },
+          { title: "Your ride was cancelled", body: "Your driver had to cancel this trip.", url: "/?screen=account" }
+        );
+      }
+      // Guests have no persistent subscription to push to — the
+      // existing in-app status polling on the tracking screen is what
+      // surfaces this for them if the app happens to be open.
+    } else {
+      sendPushToTarget(
+        supabase,
+        { type: "driver", driverId: booking.driver_id },
+        { title: "Booking cancelled", body: "A passenger cancelled their booking.", url: "/?screen=bookings" }
+      );
     }
 
     return new Response(

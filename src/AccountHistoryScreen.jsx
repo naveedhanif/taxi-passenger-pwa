@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw } from "lucide-react";
+import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2 } from "lucide-react";
+import { enablePushNotifications, getPushPermissionState, isPushSupported } from "./pushNotifications.js";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -84,6 +85,8 @@ function BookingRow({ booking, onSelect, onBookAgain, isPast }) {
  * @param {function} [props.onDeleteLocation]
  * @param {function} props.onSignOut
  * @param {function} [props.onUpdateProfile] - (name, phone) => Promise<{error?: string}>; the real, direct way to fix a wrong name/phone, instead of relying on it getting picked up from a future booking form
+ * @param {string} [props.driverId] - needed to register a push subscription against the right (driver, customer) pair
+ * @param {string|null} [props.customerSessionToken]
  */
 export default function AccountHistoryScreen({
   customer = null,
@@ -98,6 +101,8 @@ export default function AccountHistoryScreen({
   onSignOut = () => {},
   onBack = () => {},
   onUpdateProfile = null,
+  driverId = null,
+  customerSessionToken = null,
 }) {
   useGoogleFont();
   const [tab, setTab] = useState("upcoming");
@@ -106,6 +111,22 @@ export default function AccountHistoryScreen({
   const [editPhone, setEditPhone] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [pushPermission, setPushPermission] = useState(() => getPushPermissionState());
+  const [enablingPush, setEnablingPush] = useState(false);
+  const [pushError, setPushError] = useState("");
+
+  async function handleEnablePush() {
+    setEnablingPush(true);
+    setPushError("");
+    const result = await enablePushNotifications({ driverId, customerSessionToken });
+    setEnablingPush(false);
+    if (result.error) {
+      setPushError(result.error);
+      setPushPermission(getPushPermissionState());
+      return;
+    }
+    setPushPermission("granted");
+  }
 
   const { upcoming, past } = useMemo(() => categorizeBookings(bookings), [bookings]);
   const visibleBookings = tab === "upcoming" ? upcoming : past;
@@ -255,6 +276,46 @@ export default function AccountHistoryScreen({
           </div>
         )}
       </div>
+
+      {/* Push notifications */}
+      {isPushSupported() && (
+        <div className="mb-5">
+          <div
+            className="flex items-center justify-between rounded-xl p-3.5"
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+          >
+            <div className="flex items-center gap-2.5">
+              {pushPermission === "granted" ? <Bell size={16} color="#185FA5" /> : <BellOff size={16} color="#8C8977" />}
+              <div>
+                <div className="text-xs font-semibold text-[#2C2C2A]">Notifications</div>
+                <div className="text-[11px] text-[#8C8977]">
+                  {pushPermission === "granted"
+                    ? "You'll be notified even if the app is closed."
+                    : pushPermission === "denied"
+                    ? "Blocked in your browser settings."
+                    : "Get notified of trip updates and messages."}
+                </div>
+              </div>
+            </div>
+            {pushPermission !== "granted" && pushPermission !== "denied" && (
+              <button
+                onClick={handleEnablePush}
+                disabled={enablingPush}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                style={{ background: "#185FA5" }}
+              >
+                {enablingPush ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
+                Enable
+              </button>
+            )}
+          </div>
+          {pushError && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+              <AlertCircle size={12} /> {pushError}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Saved locations */}
       {savedLocations.length > 0 && (
