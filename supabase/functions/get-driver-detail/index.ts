@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     const { data: driver, error: driverError } = await supabase
       .from("drivers")
       .select(
-        "id, business_name, email, phone, phone_number, is_online, is_active, break_until, working_hours, licence_verified, spsv_licence_number, licence_verified_at, avg_rating, review_count, created_at, photo_url"
+        "id, business_name, email, phone, phone_number, is_online, is_active, break_until, working_hours, licence_verified, spsv_licence_number, licence_verified_at, licence_photo_url, avg_rating, review_count, created_at, photo_url"
       )
       .eq("id", body.driver_id)
       .single();
