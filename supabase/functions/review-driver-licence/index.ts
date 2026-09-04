@@ -53,7 +53,10 @@ Deno.serve(async (req) => {
       .update({
         licence_verified: body.approved,
         licence_verified_at: body.approved ? new Date().toISOString() : null,
-        licence_verified_by: authResult.adminId,
+        // licence_verified_by references auth.users(id) directly (confirmed
+        // via pg_constraint, not guessed) — authResult.userId, not
+        // authResult.adminId (a different table's own primary key).
+        licence_verified_by: authResult.userId,
       })
       .eq("id", body.driver_id);
     if (error) return jsonError(error.message, 500);
