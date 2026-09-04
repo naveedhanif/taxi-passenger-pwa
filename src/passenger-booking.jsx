@@ -202,6 +202,7 @@ function EmbossField({ icon: Icon, label, trailing, ...props }) {
  * pickup/dropoff suggestion state above). */
 function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
   const [suggestions, setSuggestions] = useState([]);
+  const [searchError, setSearchError] = useState("");
   const [session, setSession] = useState(() => createSearchSessionToken());
 
   useEffect(() => {
@@ -213,8 +214,14 @@ function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
       try {
         const result = await searchAddress(stop.address, mapboxToken, session);
         setSuggestions(result.suggestions);
-      } catch {
+        setSearchError("");
+      } catch (err) {
+        // Was previously silently swallowed — looked exactly like "no
+        // results found" for any real cause (bad token, wrong token
+        // scope, network issue), with zero way to tell them apart.
+        console.error("Mapbox address search failed:", err);
         setSuggestions([]);
+        setSearchError("Address search isn't working right now.");
       }
     }, 350);
     return () => clearTimeout(t);
@@ -376,6 +383,7 @@ export default function PassengerBooking({
   // survive a screen change, so these stay as ordinary local state.
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
+  const [addressSearchError, setAddressSearchError] = useState("");
   // Search Box API session tokens — one per field, persisted across
   // keystrokes within a session and regenerated after a selection is
   // made, per Mapbox's documented session-billing pattern.
@@ -383,6 +391,12 @@ export default function PassengerBooking({
   const [dropoffSession, setDropoffSession] = useState(() => createSearchSessionToken());
 
   useEffect(() => {
+    if (!mapboxToken) {
+      // A missing VITE_MAPBOX_TOKEN env var previously failed exactly
+      // the same silent way as every other error here — worth its own
+      // clear message rather than looking identical to "no results".
+      setAddressSearchError("Address search isn't configured — missing Mapbox token.");
+    }
     if (!mapboxToken || pickup.trim().length < 3 || (pickupCoords && pickupCoords.fullAddress === pickup)) {
       setPickupSuggestions([]);
       return;
@@ -391,8 +405,14 @@ export default function PassengerBooking({
       try {
         const result = await searchAddress(pickup, mapboxToken, pickupSession);
         setPickupSuggestions(result.suggestions);
-      } catch {
+        setAddressSearchError("");
+      } catch (err) {
+        // Was silently swallowed before — looked exactly like "no
+        // results" for a bad/missing token, wrong token scope, or a
+        // real network error, with zero way to tell them apart.
+        console.error("Mapbox pickup search failed:", err);
         setPickupSuggestions([]);
+        setAddressSearchError("Address search isn't working right now — try again in a moment.");
       }
     }, 350);
     return () => clearTimeout(t);
@@ -407,8 +427,11 @@ export default function PassengerBooking({
       try {
         const result = await searchAddress(dropoff, mapboxToken, dropoffSession);
         setDropoffSuggestions(result.suggestions);
-      } catch {
+        setAddressSearchError("");
+      } catch (err) {
+        console.error("Mapbox dropoff search failed:", err);
         setDropoffSuggestions([]);
+        setAddressSearchError("Address search isn't working right now — try again in a moment.");
       }
     }, 350);
     return () => clearTimeout(t);
@@ -875,6 +898,11 @@ export default function PassengerBooking({
               </div>
             )}
           </div>
+          {addressSearchError && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+              <AlertCircle size={11} /> {addressSearchError}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <EmbossField
               icon={Calendar}
