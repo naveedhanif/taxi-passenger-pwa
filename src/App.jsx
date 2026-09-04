@@ -761,14 +761,20 @@ export default function App() {
       }
 
       if (vehicleRes.error || fareRulesRes.error || !vehicleRes.data || (fareRulesRes.data ?? []).length === 0) {
-        // Surfaced in the UI rather than silently falling back to fake
-        // numbers — a driver with no fare rules set can't give an
-        // accurate estimate, and that's worth knowing about, not hiding.
-        setDriverDataError(
-          (fareRulesRes.data ?? []).length === 0
-            ? "This driver hasn't set up fare rules yet — fare estimates aren't available."
-            : "Couldn't load this driver's details."
-        );
+        // A specific reason for each real cause, not one generic
+        // catch-all — a driver who skipped Vehicle Setup during
+        // onboarding (it's the one skippable step) has a genuinely
+        // different problem than a driver with no fare rules, and each
+        // needs a different fix on the driver's own side.
+        let reason;
+        if (vehicleRes.error || fareRulesRes.error) {
+          reason = "Couldn't load this driver's details.";
+        } else if (!vehicleRes.data) {
+          reason = "This driver hasn't added their vehicle details yet — check back soon.";
+        } else {
+          reason = "This driver hasn't set up fare rules yet — fare estimates aren't available.";
+        }
+        setDriverDataError(reason);
       } else {
         setDriverDataError("");
       }
