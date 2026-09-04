@@ -69,29 +69,50 @@ export async function sendPushToTarget(supabase: AnySupabaseClient, target: Push
     const { data: subs, error } = await supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq(column, id);
     if (error || !subs || subs.length === 0) return;
 
-    await Promise.all(
-      subs.map(async (sub: { id: string; endpoint: string; p256dh: string; auth: string }) => {
-        try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            JSON.stringify(payload)
-          );
-        } catch (err) {
-          // 404/410 = the browser itself dropped the subscription
-          // (unsubscribed, site data cleared, etc.) — standard Web Push
-          // cleanup signal, not a real error. Anything else just logs;
-          // one bad subscription shouldn't block sends to the rest.
-          // deno-lint-ignore no-explicit-any
-          const statusCode = (err as any)?.statusCode;
-          if (statusCode === 404 || statusCode === 410) {
-            await supabase.from("push_subscriptions").delete().eq("id", sub.id);
-          } else {
-            console.error("push send failed for one subscription:", err);
-          }
-        }
-      })
-    );
+    await deliverToSubscriptions(supabase, subs, payload);
   } catch (err) {
     console.error("sendPushToTarget error (non-fatal):", err);
   }
+}
+
+/**
+ * Broadcasts to every owner/admin device on file — there's no single
+ * "target ID" here by design, since any registered owner should hear
+ * about it. Used today for exactly one event: a driver submitting an
+ * SPSV licence for review.
+ */
+export async function sendPushToAllAdmins(supabase: AnySupabaseClient, payload: PushPayload): Promise<void> {
+  try {
+    if (!Deno.env.get("VAPID_PUBLIC_KEY") || !Deno.env.get("VAPID_PRIVATE_KEY")) return;
+    ensureConfigured();
+
+    const { data: subs, error } = await supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("subscriber_type", "admin");
+    if (error || !subs || subs.length === 0) return;
+
+    await deliverToSubscriptions(supabase, subs, payload);
+  } catch (err) {
+    console.error("sendPushToAllAdmins error (non-fatal):", err);
+  }
+}
+
+async function deliverToSubscriptions(
+  supabase: AnySupabaseClient,
+  subs: { id: string; endpoint: string; p256dh: string; auth: string }[],
+  payload: PushPayload
+): Promise<void> {
+  await Promise.all(
+    subs.map(async (sub) => {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload));
+      } catch (err) {
+        // deno-lint-ignore no-explicit-any
+        const statusCode = (err as any)?.statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+        } else {
+          console.error("push send failed for one subscription:", err);
+        }
+      }
+    })
+  );
 }

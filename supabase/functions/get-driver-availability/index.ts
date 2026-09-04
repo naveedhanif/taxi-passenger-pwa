@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const availability = await getDriverAvailability(supabase, body.driver_id);
 
     return new Response(
-      JSON.stringify({ isOnline: availability.isOnline, breakUntil: availability.breakUntil }),
+      JSON.stringify({ isOnline: availability.isOnline, breakUntil: availability.breakUntil, reason: availability.reason }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

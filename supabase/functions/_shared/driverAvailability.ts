@@ -1,17 +1,19 @@
 // supabase/functions/_shared/driverAvailability.ts
 //
 // The single source of truth for "is this driver actually taking new
-// bookings right now" — combines three independent signals:
-//   1. Manual Online/Offline toggle (drivers.is_online)
-//   2. An optional weekly working-hours schedule (drivers.working_hours)
-//   3. A short timed break (drivers.break_until) — distinct from fully
-//      going offline; auto-expires on its own once the time passes,
-//      no separate cleanup needed.
+// bookings right now" — combines four independent signals, checked in
+// this order:
+//   1. SPSV licence verification (drivers.licence_verified) — an
+//      unverified driver is ALWAYS blocked, full stop, regardless of
+//      the other three signals below. This is a real gate added at
+//      the owner's explicit request, not just a status badge.
+//   2. Manual Online/Offline toggle (drivers.is_online)
+//   3. An optional weekly working-hours schedule (drivers.working_hours)
+//   4. A short timed break (drivers.break_until)
 //
-// PRECEDENCE: manual OFF always wins immediately, same as before this
-// existed. A break only matters if the driver is otherwise online
-// (manually and per schedule) — being on a break while also manually
-// offline is simply "offline", nothing new to layer on.
+// PRECEDENCE: unverified beats everything. Below that, manual OFF
+// always wins immediately. A break only matters if the driver is
+// otherwise online (manually and per schedule).
 //
 // Originally lived only inside get-driver-availability/index.ts;
 // pulled out here so create-booking can independently re-verify the
@@ -30,7 +32,7 @@
 //   ALTER TABLE drivers ADD COLUMN is_online boolean NOT NULL DEFAULT true;
 //   ALTER TABLE drivers ADD COLUMN working_hours jsonb;
 //   ALTER TABLE drivers ADD COLUMN break_until timestamptz;
-// (the first two may already exist from earlier deploys)
+// (licence_verified already existed from an earlier phase)
 
 // deno-lint-ignore no-explicit-any
 type AnySupabaseClient = any;
@@ -40,14 +42,22 @@ const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 export interface DriverAvailability {
   isOnline: boolean;
   breakUntil: string | null; // ISO string, only meaningful when isOnline is false because of an active break
+  reason: "unverified" | "offline" | "schedule" | "break" | "available";
 }
 
 export async function getDriverAvailability(supabase: AnySupabaseClient, driverId: string): Promise<DriverAvailability> {
-  const { data } = await supabase.from("drivers").select("is_online, working_hours, break_until").eq("id", driverId).maybeSingle();
+  const { data } = await supabase.from("drivers").select("is_online, working_hours, break_until, licence_verified").eq("id", driverId).maybeSingle();
 
   // Fails open (true) if the row is somehow missing — a driver isn't
   // accidentally hidden from bookings due to a data gap rather than a
-  // deliberate choice.
+  // deliberate choice. Verification itself does NOT fail open — a
+  // missing/null licence_verified is treated as "not verified", the
+  // safe default for a gate that exists specifically to protect
+  // passengers.
+  if (data && data.licence_verified !== true) {
+    return { isOnline: false, breakUntil: null, reason: "unverified" };
+  }
+
   const manualOnline = data?.is_online ?? true;
   let effectiveOnline = manualOnline;
 
@@ -72,5 +82,10 @@ export async function getDriverAvailability(supabase: AnySupabaseClient, driverI
   const onBreak = effectiveOnline && breakUntil != null && new Date(breakUntil) > new Date();
   if (onBreak) effectiveOnline = false;
 
-  return { isOnline: effectiveOnline, breakUntil: onBreak ? breakUntil : null };
+  let reason: DriverAvailability["reason"] = "available";
+  if (!manualOnline) reason = "offline";
+  else if (!effectiveOnline && !onBreak) reason = "schedule";
+  else if (onBreak) reason = "break";
+
+  return { isOnline: effectiveOnline, breakUntil: onBreak ? breakUntil : null, reason: effectiveOnline ? "available" : reason };
 }
