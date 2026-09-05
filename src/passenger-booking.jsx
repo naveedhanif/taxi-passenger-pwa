@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus, X, Plus } from "lucide-react";
-import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken } from "./mapboxClient";
+import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken, suggestionLabel } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
 import { formatPhoneForLinks } from "./phoneLinks.js";
 
@@ -229,12 +229,13 @@ function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
   }, [stop.address, mapboxToken, session]);
 
   async function pickSuggestion(s) {
+    const label = suggestionLabel(s);
     setSuggestions([]);
     try {
       const coords = await retrieveSuggestion(s.mapboxId, mapboxToken, session);
-      onChange({ address: s.fullAddress, coords: coords ? { ...coords, fullAddress: s.fullAddress } : null });
+      onChange({ address: label, coords: coords ? { ...coords, fullAddress: label } : null });
     } catch {
-      onChange({ address: s.fullAddress, coords: null });
+      onChange({ address: label, coords: null });
     }
     setSession(createSearchSessionToken());
   }
@@ -263,9 +264,16 @@ function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
               key={i}
               type="button"
               onClick={() => pickSuggestion(s)}
-              className="block w-full px-4 py-2.5 text-left text-xs text-[#2C2C2A] hover:bg-[#F0EEE7]"
+              className="block w-full px-4 py-2.5 text-left hover:bg-[#F0EEE7]"
             >
-              {s.fullAddress}
+              {s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase()) ? (
+                <>
+                  <div className="text-xs font-semibold text-[#2C2C2A]">{s.name}</div>
+                  <div className="text-[11px] text-[#8C8977]">{s.fullAddress}</div>
+                </>
+              ) : (
+                <div className="text-xs text-[#2C2C2A]">{s.fullAddress || s.name}</div>
+              )}
             </button>
           ))}
         </div>
@@ -438,12 +446,13 @@ export default function PassengerBooking({
   }, [dropoff, mapboxToken, dropoffSession]);
 
   async function pickPickupSuggestion(s) {
-    setPickup(s.fullAddress);
+    const label = suggestionLabel(s);
+    setPickup(label);
     setPickupSuggestions([]);
     setFormError("");
     try {
       const coords = await retrieveSuggestion(s.mapboxId, mapboxToken, pickupSession);
-      setPickupCoords(coords ? { ...coords, fullAddress: s.fullAddress } : null);
+      setPickupCoords(coords ? { ...coords, fullAddress: label } : null);
     } catch {
       setPickupCoords(null);
       setFormError("Couldn't get details for that pickup location — try again");
@@ -453,12 +462,13 @@ export default function PassengerBooking({
   }
 
   async function pickDropoffSuggestion(s) {
-    setDropoff(s.fullAddress);
+    const label = suggestionLabel(s);
+    setDropoff(label);
     setDropoffSuggestions([]);
     setFormError("");
     try {
       const coords = await retrieveSuggestion(s.mapboxId, mapboxToken, dropoffSession);
-      setDropoffCoords(coords ? { ...coords, fullAddress: s.fullAddress } : null);
+      setDropoffCoords(coords ? { ...coords, fullAddress: label } : null);
     } catch {
       setDropoffCoords(null);
       setFormError("Couldn't get details for that drop-off location — try again");
@@ -822,9 +832,16 @@ export default function PassengerBooking({
                     key={i}
                     type="button"
                     onClick={() => pickPickupSuggestion(s)}
-                    className="block w-full px-4 py-2.5 text-left text-xs text-[#2C2C2A] hover:bg-[#F0EEE7]"
+                    className="block w-full px-4 py-2.5 text-left hover:bg-[#F0EEE7]"
                   >
-                    {s.fullAddress}
+                    {s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase()) ? (
+                      <>
+                        <div className="text-xs font-semibold text-[#2C2C2A]">{s.name}</div>
+                        <div className="text-[11px] text-[#8C8977]">{s.fullAddress}</div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-[#2C2C2A]">{s.fullAddress || s.name}</div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -890,9 +907,16 @@ export default function PassengerBooking({
                     key={i}
                     type="button"
                     onClick={() => pickDropoffSuggestion(s)}
-                    className="block w-full px-4 py-2.5 text-left text-xs text-[#2C2C2A] hover:bg-[#F0EEE7]"
+                    className="block w-full px-4 py-2.5 text-left hover:bg-[#F0EEE7]"
                   >
-                    {s.fullAddress}
+                    {s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase()) ? (
+                      <>
+                        <div className="text-xs font-semibold text-[#2C2C2A]">{s.name}</div>
+                        <div className="text-[11px] text-[#8C8977]">{s.fullAddress}</div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-[#2C2C2A]">{s.fullAddress || s.name}</div>
+                    )}
                   </button>
                 ))}
               </div>

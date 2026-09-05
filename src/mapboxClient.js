@@ -161,6 +161,28 @@ function parseDirectionsRoute(json) {
   };
 }
 
+/**
+ * A search result's `fullAddress` alone is often a generic, low-detail
+ * fallback (e.g. "Dublin, K67, Ireland" — an Eircode routing key, not
+ * a real street address) whenever Mapbox doesn't have a precise
+ * street-level address for that entity — which is normal for a named
+ * place like an airport, rather than a fault in the search itself.
+ * `name` (e.g. "Dublin Airport") was already being fetched from
+ * Mapbox but never actually shown anywhere — every suggestion in the
+ * dropdown displayed only the generic address, making distinct named
+ * places indistinguishable from each other and from plain street
+ * addresses. This combines them only when they'd actually add
+ * information (skipped for a normal street address, where the name
+ * and address are already the same string).
+ */
+function suggestionLabel(s) {
+  if (!s) return "";
+  if (s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase())) {
+    return `${s.name}, ${s.fullAddress}`;
+  }
+  return s.fullAddress || s.name || "";
+}
+
 export {
   createSearchSessionToken,
   searchAddress,
@@ -171,5 +193,6 @@ export {
   parseSuggestions,
   parseRetrieveFeature,
   parseDirectionsRoute,
+  suggestionLabel,
 };
 
