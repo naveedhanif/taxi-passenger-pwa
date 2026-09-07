@@ -30,6 +30,20 @@ export function isPushSupported() {
 }
 
 /**
+ * iOS doesn't expose PushManager at all outside a home-screen-installed
+ * standalone app — a hard Apple/WebKit platform restriction, identical
+ * across every browser on iOS. isPushSupported() already correctly
+ * returns false in this exact case, but that alone doesn't tell an
+ * iPhone passenger the one thing that actually fixes it. Lets the UI
+ * show real guidance instead of just hiding the feature silently.
+ */
+export function isIosNonStandalone() {
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  return isIos && !isStandalone;
+}
+
+/**
  * @param {object} params
  * @param {string} params.driverId
  * @param {string} params.customerSessionToken - required; this is customer-only, guests can't call this meaningfully

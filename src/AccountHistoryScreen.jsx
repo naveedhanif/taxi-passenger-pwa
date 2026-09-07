@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2, Car, Tag } from "lucide-react";
-import { enablePushNotifications, getPushPermissionState, isPushSupported } from "./pushNotifications.js";
+import { enablePushNotifications, getPushPermissionState, isPushSupported, isIosNonStandalone } from "./pushNotifications.js";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -299,7 +299,19 @@ export default function AccountHistoryScreen({
       </div>
 
       {/* Push notifications */}
-      {isPushSupported() && (
+      {isIosNonStandalone() && (
+        <div className="mb-5 rounded-xl p-3.5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+          <div className="mb-1.5 flex items-center gap-2.5">
+            <Bell size={16} color="#185FA5" />
+            <div className="text-xs font-semibold text-[#2C2C2A]">Get notifications on iPhone</div>
+          </div>
+          <p className="text-[11px] text-[#8C8977]">
+            iPhone only allows notifications for apps added to your Home Screen — not a regular Safari tab. Tap{" "}
+            <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from that new icon to enable them.
+          </p>
+        </div>
+      )}
+      {!isIosNonStandalone() && isPushSupported() && (
         <div className="mb-5">
           <div
             className="flex items-center justify-between rounded-xl p-3.5"
