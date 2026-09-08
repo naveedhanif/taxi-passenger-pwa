@@ -59,3 +59,50 @@ export async function cancelBooking({ bookingId, guestAccessToken, customerSessi
   }
   return data;
 }
+
+/**
+ * Changes pickup/drop-off/scheduled time on a booking that hasn't
+ * progressed past "confirmed" yet — the same window cancelBooking
+ * already uses, not a separately invented rule. See
+ * modify-booking/index.ts for the full real-route + fare
+ * recalculation this triggers server-side.
+ *
+ * @param {object} params
+ * @param {string} params.bookingId
+ * @param {string|null} [params.guestAccessToken]
+ * @param {string|null} [params.customerSessionToken]
+ * @param {{address:string, lat:number, lng:number}} params.pickup
+ * @param {{address:string, lat:number, lng:number}} params.dropoff
+ * @param {string} params.scheduledTime - ISO string
+ * @returns {Promise<{modified:true, newFare:number, fareDifference:number, needsManualSettlement:boolean} | {error:string}>}
+ */
+export async function modifyBooking({ bookingId, guestAccessToken, customerSessionToken, pickup, dropoff, scheduledTime }) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/modify-booking`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${customerSessionToken || anonKey}`,
+      apikey: anonKey,
+    },
+    body: JSON.stringify({
+      booking_id: bookingId,
+      access_token: guestAccessToken || null,
+      pickup_address: pickup.address,
+      pickup_lat: pickup.lat,
+      pickup_lng: pickup.lng,
+      dropoff_address: dropoff.address,
+      dropoff_lat: dropoff.lat,
+      dropoff_lng: dropoff.lng,
+      scheduled_time: scheduledTime,
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    return { error: data.error || "Couldn't modify this booking" };
+  }
+  return data;
+}

@@ -3,6 +3,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, MessageSquare, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check } from "lucide-react";
 import { getBookingStatus, cancelBooking } from "./bookingStatusApi.js";
+import ModifyBookingScreen from "./ModifyBookingScreen.jsx";
 import { submitReview } from "./reviewApi.js";
 import { createTipPayment } from "./tipApi.js";
 import TipPaymentForm from "./TipPaymentForm.jsx";
@@ -174,6 +175,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [modifyOpen, setModifyOpen] = useState(false);
   const pollRef = useRef(null);
   // Whether this exact booking already got a rating submitted — checked
   // against localStorage so a reload after rating doesn't re-show the
@@ -781,18 +783,27 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           Back to home
         </button>
       ) : booking.selfCancelable && !isSharedView ? (
-        <button
-          onClick={handleCancel}
-          disabled={canceling}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium disabled:opacity-60"
-          style={{
-            background: "#F0EEE7",
-            color: "#A32D2D",
-            boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)",
-          }}
-        >
-          <X size={14} /> {canceling ? "Cancelling…" : "Cancel booking"}
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={() => setModifyOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium"
+            style={{ background: "var(--bg-card-alt)", color: "var(--accent)", boxShadow: "var(--shadow-btn)" }}
+          >
+            Modify booking
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={canceling}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium disabled:opacity-60"
+            style={{
+              background: "var(--bg-card-alt)",
+              color: "var(--error-text)",
+              boxShadow: "var(--shadow-btn)",
+            }}
+          >
+            <X size={14} /> {canceling ? "Cancelling…" : "Cancel booking"}
+          </button>
+        </div>
       ) : isSharedView ? (
         <div className="text-center text-xs text-[#8C8977]">You're viewing a shared trip.</div>
       ) : phoneLinks ? (
@@ -863,6 +874,21 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
             </div>
           </div>
         </>
+      )}
+
+      {modifyOpen && (
+        <ModifyBookingScreen
+          booking={booking}
+          bookingId={bookingId}
+          guestAccessToken={guestAccessToken}
+          customerSessionToken={customerSessionToken}
+          mapboxToken={import.meta.env.VITE_MAPBOX_TOKEN || ""}
+          onClose={() => setModifyOpen(false)}
+          onModified={() => {
+            setModifyOpen(false);
+            load();
+          }}
+        />
       )}
     </div>
   );
