@@ -19,6 +19,7 @@ import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./sav
 import { listRecurringRides, addRecurringRide, toggleRecurringRide, deleteRecurringRide } from "./recurringRidesApi.js";
 import PromoCodesScreen from "./PromoCodesScreen.jsx";
 import { getActivePromo, listMyPromos } from "./promoApi.js";
+import { ThemeProvider } from "./ThemeContext.jsx";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -50,7 +51,7 @@ const STATUS_ALERT_STYLES = {
   error: { background: "#FCEBEB", color: "#791F1F", border: "1px solid #F3C6C6" },
 };
 
-export default function App() {
+function AppInner() {
   const [screen, setScreen] = useState("booking");
   const [menuOpen, setMenuOpen] = useState(false);
   // One-level "back" support for sub-screens (status/account/auth) —
@@ -1518,5 +1519,13 @@ function VersionBadge() {
     >
       {copied ? "copied!" : `${sha}${buildLabel ? ` · ${buildLabel}` : ""}`}
     </button>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }

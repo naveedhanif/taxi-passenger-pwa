@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2, Car, Tag } from "lucide-react";
 import { enablePushNotifications, getPushPermissionState, isPushSupported, isIosNonStandalone } from "./pushNotifications.js";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -29,13 +30,13 @@ function useGoogleFont() {
 }
 
 const STATUS_LABEL = {
-  pending: { label: "Pending", bg: "#FAEEDA", text: "#633806" },
-  confirmed: { label: "Confirmed", bg: "#EAF3DE", text: "#27500A" },
-  en_route: { label: "En route", bg: "#E6F1FB", text: "#0C447C" },
-  arrived: { label: "Arrived", bg: "#E6F1FB", text: "#0C447C" },
-  in_progress: { label: "In progress", bg: "#E6F1FB", text: "#0C447C" },
-  completed: { label: "Completed", bg: "#F1EFE8", text: "#5F5E5A" },
-  canceled: { label: "Canceled", bg: "#FCEBEB", text: "#791F1F" },
+  pending: { label: "Pending", bg: "var(--warning-bg)", text: "var(--warning-text)" },
+  confirmed: { label: "Confirmed", bg: "var(--success-bg)", text: "var(--success-text)" },
+  en_route: { label: "En route", bg: "var(--info-bg)", text: "var(--info-text)" },
+  arrived: { label: "Arrived", bg: "var(--info-bg)", text: "var(--info-text)" },
+  in_progress: { label: "In progress", bg: "var(--info-bg)", text: "var(--info-text)" },
+  completed: { label: "Completed", bg: "var(--bg-card-alt)", text: "var(--text-secondary)" },
+  canceled: { label: "Canceled", bg: "var(--error-bg)", text: "var(--error-text)" },
 };
 
 function BookingRow({ booking, onSelect, onBookAgain, isPast }) {
@@ -44,11 +45,11 @@ function BookingRow({ booking, onSelect, onBookAgain, isPast }) {
     day: "numeric", month: "short", year: "numeric",
   });
   return (
-    <div className="rounded-lg border border-[#ECE9E0] px-3.5 py-3">
+    <div className="rounded-lg border border-[var(--border-card)] px-3.5 py-3">
       <button onClick={() => onSelect(booking)} className="flex w-full items-center justify-between text-left">
         <div>
-          <div className="text-sm text-[#2C2C2A]">{booking.pickup_address} → {booking.dropoff_address}</div>
-          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#8C8977]">
+          <div className="text-sm text-[var(--text-primary)]">{booking.pickup_address} → {booking.dropoff_address}</div>
+          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
             <Clock size={10} /> {dateLabel}
           </div>
         </div>
@@ -56,7 +57,7 @@ function BookingRow({ booking, onSelect, onBookAgain, isPast }) {
           <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: s.bg, color: s.text }}>
             {s.label}
           </span>
-          <ChevronRight size={14} color="#B4B2A9" />
+          <ChevronRight size={14} color="var(--text-muted)" />
         </div>
       </button>
       {isPast && onBookAgain && (
@@ -66,7 +67,7 @@ function BookingRow({ booking, onSelect, onBookAgain, isPast }) {
             onBookAgain(booking);
           }}
           className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white"
-          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+          style={{ background: "var(--accent-gradient)" }}
         >
           <RotateCw size={12} /> Book again
         </button>
@@ -169,18 +170,18 @@ export default function AccountHistoryScreen({
         <button
           onClick={onBack}
           className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
           aria-label="Back"
         >
-          <ArrowLeft size={15} color="#5F5E5A" />
+          <ArrowLeft size={15} color="var(--text-secondary)" />
         </button>
         <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-          <User size={22} color="#8C8977" />
-          <div className="text-sm text-[#5F5E5A]">Sign in to see your account and booking history.</div>
+          <User size={22} color="var(--text-muted)" />
+          <div className="text-sm text-[var(--text-secondary)]">Sign in to see your account and booking history.</div>
           <button
             onClick={() => onNavigate("auth")}
             className="mt-1 rounded-full px-5 py-2.5 text-xs font-semibold text-white"
-            style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+            style={{ background: "var(--accent-gradient)" }}
           >
             Sign in
           </button>
@@ -190,7 +191,7 @@ export default function AccountHistoryScreen({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}>
+    <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}>
       {/* Profile header — centered avatar/name/stat, matching the
           reference layout, kept in this project's light/embossed
           theme rather than the reference's dark colors. Trip count is
@@ -200,56 +201,59 @@ export default function AccountHistoryScreen({
         <button
           onClick={onBack}
           className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
           aria-label="Back"
         >
-          <ArrowLeft size={15} color="#5F5E5A" />
+          <ArrowLeft size={15} color="var(--text-secondary)" />
         </button>
-        {onUpdateProfile && !editingProfile && (
-          <button
-            onClick={startEditingProfile}
-            className="flex h-9 w-9 items-center justify-center rounded-full"
-            style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
-            aria-label="Edit profile"
-          >
-            <Pencil size={13} color="#5F5E5A" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {onUpdateProfile && !editingProfile && (
+            <button
+              onClick={startEditingProfile}
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+              style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
+              aria-label="Edit profile"
+            >
+              <Pencil size={13} color="var(--text-secondary)" />
+            </button>
+          )}
+        </div>
       </div>
 
       {editingProfile ? (
-        <div className="mb-5 rounded-xl p-3.5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+        <div className="mb-5 rounded-xl p-3.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
           <div className="mb-2 space-y-2">
             <div
               className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{ background: "#F0EEE7", boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)" }}
+              style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-inset)" }}
             >
-              <User size={14} color="#8C8977" />
+              <User size={14} color="var(--text-muted)" />
               <input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Your name"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
-                style={{ color: "#2C2C2A" }}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
+                style={{ color: "var(--text-primary)" }}
               />
             </div>
             <div
               className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{ background: "#F0EEE7", boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)" }}
+              style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-inset)" }}
             >
-              <Phone size={14} color="#8C8977" />
+              <Phone size={14} color="var(--text-muted)" />
               <input
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
                 placeholder="Phone number"
                 type="tel"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
-                style={{ color: "#2C2C2A" }}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
+                style={{ color: "var(--text-primary)" }}
               />
             </div>
           </div>
           {profileError && (
-            <div className="mb-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+            <div className="mb-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
               <AlertCircle size={12} /> {profileError}
             </div>
           )}
@@ -258,15 +262,15 @@ export default function AccountHistoryScreen({
               onClick={saveProfile}
               disabled={savingProfile || !editName.trim()}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white disabled:opacity-60"
-              style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+              style={{ background: "var(--accent-gradient)" }}
             >
               <Check size={13} /> {savingProfile ? "Saving…" : "Save"}
             </button>
             <button
               onClick={() => setEditingProfile(false)}
               disabled={savingProfile}
-              className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-[#5F5E5A]"
-              style={{ background: "#F0EEE7" }}
+              className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-[var(--text-secondary)]"
+              style={{ background: "var(--bg-card-alt)" }}
             >
               <X size={13} />
             </button>
@@ -276,16 +280,16 @@ export default function AccountHistoryScreen({
         <div className="mb-6 flex flex-col items-center text-center">
           <div
             className="mb-3 flex h-20 w-20 items-center justify-center rounded-full text-xl font-bold text-white"
-            style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)", fontFamily: "'Space Grotesk'", boxShadow: "3px 3px 10px rgba(4,44,83,0.25)" }}
+            style={{ background: "var(--accent-gradient)", fontFamily: "'Space Grotesk'", boxShadow: "var(--shadow-raised)" }}
           >
             {!nameLooksLikePlaceholder && customer.name?.charAt(0)?.toUpperCase() || <User size={26} />}
           </div>
           {nameLooksLikePlaceholder ? (
-            <div className="text-base font-semibold" style={{ color: "#633806" }}>Add your name</div>
+            <div className="text-base font-semibold" style={{ color: "var(--warning-text)" }}>Add your name</div>
           ) : (
-            <div className="text-lg font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>{customer.name || "Your account"}</div>
+            <div className="text-lg font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>{customer.name || "Your account"}</div>
           )}
-          <div className="mt-1 text-xs text-[#8C8977]">
+          <div className="mt-1 text-xs text-[var(--text-muted)]">
             {customer.phone || "Add a phone number"}
             {completedTripCount > 0 && <> · {completedTripCount} {completedTripCount === 1 ? "trip" : "trips"}</>}
           </div>
@@ -294,25 +298,25 @@ export default function AccountHistoryScreen({
 
       {/* Quick action tiles */}
       <div className="mb-6 grid grid-cols-3 gap-3">
-        <button onClick={() => onNavigate("booking")} className="flex flex-col items-center gap-1.5 rounded-xl py-4 text-xs font-semibold text-[#2C2C2A]" style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}>
-          <Car size={18} className="text-[#185FA5]" /> Book
+        <button onClick={() => onNavigate("booking")} className="flex flex-col items-center gap-1.5 rounded-xl py-4 text-xs font-semibold text-[var(--text-primary)]" style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}>
+          <Car size={18} className="text-[var(--accent)]" /> Book
         </button>
-        <button onClick={() => onNavigate("status")} className="flex flex-col items-center gap-1.5 rounded-xl py-4 text-xs font-semibold text-[#2C2C2A]" style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}>
-          <MapPin size={18} className="text-[#185FA5]" /> Track
+        <button onClick={() => onNavigate("status")} className="flex flex-col items-center gap-1.5 rounded-xl py-4 text-xs font-semibold text-[var(--text-primary)]" style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}>
+          <MapPin size={18} className="text-[var(--accent)]" /> Track
         </button>
-        <button onClick={() => onNavigate("promos")} className="flex flex-col items-center gap-1.5 rounded-xl py-4 text-xs font-semibold text-[#2C2C2A]" style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}>
-          <Tag size={18} className="text-[#185FA5]" /> Promos
+        <button onClick={() => onNavigate("promos")} className="flex flex-col items-center gap-1.5 rounded-xl py-4 text-xs font-semibold text-[var(--text-primary)]" style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}>
+          <Tag size={18} className="text-[var(--accent)]" /> Promos
         </button>
       </div>
 
       {/* Push notifications */}
       {isIosNonStandalone() && (
-        <div className="mb-5 rounded-xl p-3.5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+        <div className="mb-5 rounded-xl p-3.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
           <div className="mb-1.5 flex items-center gap-2.5">
-            <Bell size={16} color="#185FA5" />
-            <div className="text-xs font-semibold text-[#2C2C2A]">Get notifications on iPhone</div>
+            <Bell size={16} color="var(--accent)" />
+            <div className="text-xs font-semibold text-[var(--text-primary)]">Get notifications on iPhone</div>
           </div>
-          <p className="text-[11px] text-[#8C8977]">
+          <p className="text-[11px] text-[var(--text-muted)]">
             iPhone only allows notifications for apps added to your Home Screen — not a regular Safari tab. Tap{" "}
             <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from that new icon to enable them.
           </p>
@@ -322,13 +326,13 @@ export default function AccountHistoryScreen({
         <div className="mb-5">
           <div
             className="flex items-center justify-between rounded-xl p-3.5"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
             <div className="flex items-center gap-2.5">
-              {pushPermission === "granted" ? <Bell size={16} color="#185FA5" /> : <BellOff size={16} color="#8C8977" />}
+              {pushPermission === "granted" ? <Bell size={16} color="var(--accent)" /> : <BellOff size={16} color="var(--text-muted)" />}
               <div>
-                <div className="text-xs font-semibold text-[#2C2C2A]">Notifications</div>
-                <div className="text-[11px] text-[#8C8977]">
+                <div className="text-xs font-semibold text-[var(--text-primary)]">Notifications</div>
+                <div className="text-[11px] text-[var(--text-muted)]">
                   {pushPermission === "granted"
                     ? "You'll be notified even if the app is closed."
                     : pushPermission === "denied"
@@ -342,7 +346,7 @@ export default function AccountHistoryScreen({
                 onClick={handleEnablePush}
                 disabled={enablingPush}
                 className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                style={{ background: "#185FA5" }}
+                style={{ background: "var(--accent)" }}
               >
                 {enablingPush ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
                 Enable
@@ -350,7 +354,7 @@ export default function AccountHistoryScreen({
             )}
           </div>
           {pushError && (
-            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
               <AlertCircle size={12} /> {pushError}
             </div>
           )}
@@ -360,22 +364,22 @@ export default function AccountHistoryScreen({
       {/* Saved locations */}
       {savedLocations.length > 0 && (
         <div className="mb-5">
-          <div className="mb-2 text-xs font-medium text-[#5F5E5A]">Saved locations</div>
+          <div className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Saved locations</div>
           <div
             className="rounded-xl p-2"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
             {savedLocations.map((loc) => (
               <div key={loc.id} className="flex items-center justify-between px-2 py-2">
                 <div className="flex items-center gap-2.5">
-                  {loc.label.toLowerCase() === "home" ? <Home size={14} color="#8C8977" /> : loc.label.toLowerCase() === "work" ? <Briefcase size={14} color="#8C8977" /> : <MapPin size={14} color="#8C8977" />}
+                  {loc.label.toLowerCase() === "home" ? <Home size={14} color="var(--text-muted)" /> : loc.label.toLowerCase() === "work" ? <Briefcase size={14} color="var(--text-muted)" /> : <MapPin size={14} color="var(--text-muted)" />}
                   <div>
-                    <div className="text-xs font-medium text-[#2C2C2A]">{loc.label}</div>
-                    <div className="text-[11px] text-[#8C8977]">{loc.address}</div>
+                    <div className="text-xs font-medium text-[var(--text-primary)]">{loc.label}</div>
+                    <div className="text-[11px] text-[var(--text-muted)]">{loc.address}</div>
                   </div>
                 </div>
                 <button onClick={() => onDeleteLocation(loc.id)}>
-                  <Trash2 size={13} color="#B4B2A9" />
+                  <Trash2 size={13} color="var(--text-muted)" />
                 </button>
               </div>
             ))}
@@ -386,18 +390,18 @@ export default function AccountHistoryScreen({
       {/* Recurring ride templates */}
       {recurringRides.length > 0 && (
         <div className="mb-5">
-          <div className="mb-2 text-xs font-medium text-[#5F5E5A]">Recurring rides</div>
+          <div className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Recurring rides</div>
           <div
             className="rounded-xl p-2"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
             {recurringRides.map((ride) => (
               <div key={ride.id} className="flex items-center justify-between px-2 py-2.5">
                 <div className="flex items-center gap-2.5">
-                  <RotateCw size={14} color={ride.active ? "#185FA5" : "#B4B2A9"} />
+                  <RotateCw size={14} color={ride.active ? "var(--accent)" : "var(--text-muted)"} />
                   <div>
-                    <div className="text-xs font-medium text-[#2C2C2A]">{ride.label}</div>
-                    <div className="text-[11px] text-[#8C8977]">
+                    <div className="text-xs font-medium text-[var(--text-primary)]">{ride.label}</div>
+                    <div className="text-[11px] text-[var(--text-muted)]">
                       {(ride.days_of_week || []).map((d) => d.slice(0, 3)).join(", ")} · {ride.time_of_day}
                     </div>
                   </div>
@@ -406,12 +410,12 @@ export default function AccountHistoryScreen({
                   <button
                     onClick={() => onToggleRecurringRide(ride.id, !ride.active)}
                     className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                    style={{ background: ride.active ? "#EAF3DE" : "#F1EFE8", color: ride.active ? "#27500A" : "#8C8977" }}
+                    style={{ background: ride.active ? "var(--success-bg)" : "var(--bg-card-alt)", color: ride.active ? "var(--success-text)" : "var(--text-muted)" }}
                   >
                     {ride.active ? "On" : "Off"}
                   </button>
                   <button onClick={() => onDeleteRecurringRide(ride.id)}>
-                    <Trash2 size={13} color="#B4B2A9" />
+                    <Trash2 size={13} color="var(--text-muted)" />
                   </button>
                 </div>
               </div>
@@ -421,18 +425,18 @@ export default function AccountHistoryScreen({
       )}
 
       {/* Booking history */}
-      <div className="mb-2 flex gap-1.5 rounded-full p-1" style={{ background: "#EFEDE5" }}>
+      <div className="mb-2 flex gap-1.5 rounded-full p-1" style={{ background: "var(--bg-card-alt)" }}>
         <button
           onClick={() => setTab("upcoming")}
           className="flex-1 rounded-full py-1.5 text-xs font-medium"
-          style={{ background: tab === "upcoming" ? "#185FA5" : "transparent", color: tab === "upcoming" ? "#FFFFFF" : "#8C8977" }}
+          style={{ background: tab === "upcoming" ? "var(--accent)" : "transparent", color: tab === "upcoming" ? "white" : "var(--text-muted)" }}
         >
           Upcoming ({upcoming.length})
         </button>
         <button
           onClick={() => setTab("past")}
           className="flex-1 rounded-full py-1.5 text-xs font-medium"
-          style={{ background: tab === "past" ? "#185FA5" : "transparent", color: tab === "past" ? "#FFFFFF" : "#8C8977" }}
+          style={{ background: tab === "past" ? "var(--accent)" : "transparent", color: tab === "past" ? "white" : "var(--text-muted)" }}
         >
           Past ({past.length})
         </button>
@@ -440,7 +444,7 @@ export default function AccountHistoryScreen({
 
       <div className="mb-6 space-y-2">
         {visibleBookings.length === 0 ? (
-          <div className="py-8 text-center text-xs text-[#8C8977]">
+          <div className="py-8 text-center text-xs text-[var(--text-muted)]">
             {tab === "upcoming" ? "No upcoming trips" : "No past trips yet"}
           </div>
         ) : (
@@ -452,8 +456,8 @@ export default function AccountHistoryScreen({
 
       <button
         onClick={onSignOut}
-        className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-medium text-[#791F1F]"
-        style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+        className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-medium text-[var(--error-text)]"
+        style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
       >
         <LogOut size={13} /> Sign out
       </button>

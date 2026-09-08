@@ -1,3 +1,62 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+/* ============================================================
+   THEME SYSTEM — light is the existing, unchanged default theme
+   (same values already used everywhere in this app). Dark is a new
+   alternate theme, toggled via a `data-theme="dark"` attribute on
+   <html>. Every existing hardcoded color in the app is unaffected
+   until a component is specifically migrated to reference these
+   variables instead — so turning this on changes nothing by itself.
+   ============================================================ */
+:root,
+[data-theme="light"] {
+  --bg-page: #F7F7F5;
+  --bg-card: #FBFAF6;
+  --bg-card-alt: #F1EFE8;
+  --bg-input: #FFFFFF;
+  --border-card: #ECE9E0;
+  --border-input: #E4E2DA;
+  --text-primary: #2C2C2A;
+  --text-secondary: #5F5E5A;
+  --text-muted: #8C8977;
+  --accent: #185FA5;
+  --accent-gradient: linear-gradient(135deg, #378ADD, #0C447C);
+  --success-bg: #EAF3DE;
+  --success-text: #27500A;
+  --error-bg: #FCEBEB;
+  --error-text: #791F1F;
+  --info-bg: #E6F1FB;
+  --info-text: #0C447C;
+  --warning-bg: #FAEEDA;
+  --warning-text: #633806;
+  --shadow-raised: 6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85);
+  --shadow-btn: 3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85);
+  --shadow-inset: inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8);
+}
+
+[data-theme="dark"] {
+  --bg-page: #0B1220;
+  --bg-card: #131B2C;
+  --bg-card-alt: #1A2338;
+  --bg-input: #0F1728;
+  --border-card: #212C42;
+  --border-input: #2A3652;
+  --text-primary: #F2F5F9;
+  --text-secondary: #A9B4C6;
+  --text-muted: #6E7A90;
+  --accent: #2ED9A8;
+  --accent-gradient: linear-gradient(135deg, #2ED9A8, #1AAE84);
+  --success-bg: #103A2C;
+  --success-text: #4ADE9A;
+  --error-bg: #3A1616;
+  --error-text: #F27A7A;
+  --info-bg: #14243D;
+  --info-text: #6FB6F5;
+  --warning-bg: #3A2C10;
+  --warning-text: #E8C169;
+  --shadow-raised: 6px 6px 14px rgba(0,0,0,0.35), -2px -2px 8px rgba(255,255,255,0.02);
+  --shadow-btn: 3px 3px 6px rgba(0,0,0,0.4), -1px -1px 4px rgba(255,255,255,0.03);
+  --shadow-inset: inset 2px 2px 5px rgba(0,0,0,0.4), inset -1px -1px 3px rgba(255,255,255,0.02);
+}
+
