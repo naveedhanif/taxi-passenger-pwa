@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2, Car, Tag } from "lucide-react";
+import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2, Car, Tag, Copy, Share2, Gift } from "lucide-react";
 import { enablePushNotifications, getPushPermissionState, isPushSupported, isIosNonStandalone } from "./pushNotifications.js";
+import { getMyReferralCode } from "./referralApi.js";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -115,6 +116,52 @@ export default function AccountHistoryScreen({
   const [pushPermission, setPushPermission] = useState(() => getPushPermissionState());
   const [enablingPush, setEnablingPush] = useState(false);
   const [pushError, setPushError] = useState("");
+
+  const [referralCode, setReferralCode] = useState(null);
+  const [rewardPercent, setRewardPercent] = useState(null);
+  const [referralCopied, setReferralCopied] = useState(false);
+
+  useEffect(() => {
+    // Only a real signed-in customer has a referral code — a guest
+    // booking has no persistent identity to attach one to, same
+    // reasoning as every other "guest can't persist things" limit in
+    // this app.
+    if (!customer || !customerSessionToken || !driverId) return;
+    let cancelled = false;
+    getMyReferralCode({ driverId, customerSessionToken }).then((result) => {
+      if (cancelled || result.error) return;
+      setReferralCode(result.referralCode);
+      setRewardPercent(result.rewardPercent);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customer, customerSessionToken, driverId]);
+
+  const referralShareUrl = referralCode ? `${window.location.origin}${window.location.pathname}?ref=${referralCode}` : "";
+  const referralShareText = rewardPercent
+    ? `Use my code ${referralCode} for ${rewardPercent}% off your first ride — book here: ${referralShareUrl}`
+    : "";
+
+  function handleCopyReferral() {
+    navigator.clipboard?.writeText(referralCode);
+    setReferralCopied(true);
+    setTimeout(() => setReferralCopied(false), 1500);
+  }
+
+  async function handleShareReferral() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Get a discount on your ride", text: referralShareText, url: referralShareUrl });
+        return;
+      } catch {
+        // Cancelled — fall through to copy.
+      }
+    }
+    navigator.clipboard?.writeText(referralShareText);
+    setReferralCopied(true);
+    setTimeout(() => setReferralCopied(false), 1500);
+  }
 
   async function handleEnablePush() {
     setEnablingPush(true);
@@ -306,6 +353,64 @@ export default function AccountHistoryScreen({
           <Tag size={18} className="text-[var(--accent)]" /> Promos
         </button>
       </div>
+
+      {/* Refer & Earn — matches the reference layout. referralCode and
+          rewardPercent are both real (get-my-referral-code), never
+          fabricated — the reward is a percent-off promo code (this
+          driver's own configured value), not a fixed euro amount, so
+          the copy below says so honestly rather than showing a flat
+          "€10" that doesn't reflect how this app's referral mechanic
+          actually works. */}
+      {referralCode && (
+        <div className="mb-5 rounded-xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
+          <div className="mb-3 flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--bg-card-alt)" }}>
+              <Gift size={18} color="var(--accent)" />
+            </div>
+            <div>
+              <div className="text-base font-bold" style={{ color: "var(--text-primary)", fontFamily: "'Space Grotesk'" }}>
+                Refer & Earn {rewardPercent}%
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Give friends {rewardPercent}% off their first ride. Once they complete it, you get a {rewardPercent}% off code for your own next ride.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-3 flex items-center justify-between gap-2 rounded-lg p-3" style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)" }}>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Your personal referral code</div>
+              <div className="font-mono text-base font-bold" style={{ color: "var(--accent)" }}>{referralCode}</div>
+            </div>
+            <button
+              onClick={handleCopyReferral}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+              style={{ background: "var(--bg-card-alt)", color: "var(--text-primary)" }}
+            >
+              {referralCopied ? <Check size={13} /> : <Copy size={13} />} {referralCopied ? "Copied" : "Copy"}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(referralShareText)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold"
+              style={{ background: "var(--bg-card-alt)", color: "var(--text-primary)" }}
+            >
+              WhatsApp
+            </a>
+            <button
+              onClick={handleShareReferral}
+              className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold"
+              style={{ background: "var(--bg-card-alt)", color: "var(--text-primary)" }}
+            >
+              <Share2 size={13} /> More options
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Push notifications */}
       {isIosNonStandalone() && (
