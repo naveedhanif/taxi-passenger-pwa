@@ -19,19 +19,19 @@ function MapPreview({ hasRoute }) {
     <div
       className="mb-5 overflow-hidden rounded-xl"
       style={{
-        background: "#FBFAF6",
-        border: "1px solid #ECE9E0",
-        boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-card)",
+        boxShadow: "var(--shadow-raised)",
       }}
     >
       <svg viewBox="0 0 400 180" className="block w-full" style={{ height: 150 }}>
-        <rect width="400" height="180" fill="#EAE8E1" />
+        <rect width="400" height="180" fill="var(--bg-card-alt)" />
         {/* stylized road grid — not a real map, a schematic stand-in */}
         {[40, 110, 180, 250, 320].map((x) => (
-          <line key={x} x1={x} y1="0" x2={x} y2="180" stroke="#D8D5CB" strokeWidth="2" />
+          <line key={x} x1={x} y1="0" x2={x} y2="180" stroke="var(--border-card)" strokeWidth="2" />
         ))}
         {[30, 80, 130, 180].map((y) => (
-          <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="#D8D5CB" strokeWidth="2" />
+          <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="var(--border-card)" strokeWidth="2" />
         ))}
 
         {hasRoute ? (
@@ -39,18 +39,18 @@ function MapPreview({ hasRoute }) {
             <path
               d="M 70 140 Q 180 60 330 45"
               fill="none"
-              stroke="#185FA5"
+              stroke="var(--accent)"
               strokeWidth="3"
               strokeDasharray="7 6"
               strokeLinecap="round"
             />
-            <circle cx="70" cy="140" r="7" fill="#2C2C2A" />
-            <circle cx="70" cy="140" r="3" fill="#FBFAF6" />
-            <circle cx="330" cy="45" r="7" fill="#185FA5" />
-            <circle cx="330" cy="45" r="3" fill="#FBFAF6" />
+            <circle cx="70" cy="140" r="7" fill="var(--text-primary)" />
+            <circle cx="70" cy="140" r="3" fill="var(--bg-card)" />
+            <circle cx="330" cy="45" r="7" fill="var(--accent)" />
+            <circle cx="330" cy="45" r="3" fill="var(--bg-card)" />
           </>
         ) : (
-          <text x="200" y="94" textAnchor="middle" fontSize="12" fill="#8C8977" fontFamily="Inter">
+          <text x="200" y="94" textAnchor="middle" fontSize="12" fill="var(--text-muted)" fontFamily="Inter">
             Enter pickup and drop-off to preview your route
           </text>
         )}
@@ -108,24 +108,24 @@ function RecurringToggle({ pickupCoords, dropoffCoords, time, onMakeRecurring })
   }
 
   if (saved) {
-    return <div className="mt-3 text-xs" style={{ color: "#27500A" }}>Saved as a recurring ride — see Account to manage it.</div>;
+    return <div className="mt-3 text-xs" style={{ color: "var(--success-text)" }}>Saved as a recurring ride — see Account to manage it.</div>;
   }
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-3 text-xs font-semibold" style={{ color: "#185FA5" }}>
+      <button type="button" onClick={() => setOpen(true)} className="mt-3 text-xs font-semibold" style={{ color: "var(--accent)" }}>
         + Make this a recurring ride
       </button>
     );
   }
 
   return (
-    <div className="mt-3 rounded-xl p-3.5" style={{ background: "#F1EFE8" }}>
+    <div className="mt-3 rounded-xl p-3.5" style={{ background: "var(--bg-card-alt)" }}>
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder="Name this trip (e.g. Morning commute)"
-        className="mb-2.5 w-full rounded-lg bg-white px-3 py-2 text-xs text-[#2C2C2A] placeholder:text-[#B4B2A9]"
+        className="mb-2.5 w-full rounded-lg bg-white px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
       />
       <div className="mb-2.5 flex gap-1.5">
         {DAY_OPTIONS.map((d) => (
@@ -134,24 +134,24 @@ function RecurringToggle({ pickupCoords, dropoffCoords, time, onMakeRecurring })
             type="button"
             onClick={() => toggleDay(d.key)}
             className="h-7 w-7 rounded-full text-[11px] font-semibold"
-            style={{ background: days.includes(d.key) ? "#185FA5" : "#E4E2DA", color: days.includes(d.key) ? "white" : "#5F5E5A" }}
+            style={{ background: days.includes(d.key) ? "var(--accent)" : "var(--border-input)", color: days.includes(d.key) ? "white" : "var(--text-secondary)" }}
           >
             {d.label}
           </button>
         ))}
       </div>
-      {error && <div className="mb-2 text-[11px]" style={{ color: "#A32D2D" }}>{error}</div>}
+      {error && <div className="mb-2 text-[11px]" style={{ color: "var(--error-text)" }}>{error}</div>}
       <div className="flex gap-2">
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
           className="rounded-lg px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-60"
-          style={{ background: "#185FA5" }}
+          style={{ background: "var(--accent)" }}
         >
           {saving ? "Saving…" : "Save"}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3.5 py-2 text-xs font-medium text-[#5F5E5A]">
+        <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3.5 py-2 text-xs font-medium text-[var(--text-secondary)]">
           Cancel
         </button>
       </div>
@@ -175,19 +175,19 @@ function minBookableDate() {
 function EmbossField({ icon: Icon, label, trailing, ...props }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-[#5F5E5A]">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">{label}</label>
       <div
         className="flex items-center gap-2.5 rounded-xl px-4 py-3"
         style={{
-          background: "#F0EEE7",
-          boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)",
+          background: "var(--bg-card-alt)",
+          boxShadow: "var(--shadow-inset)",
         }}
       >
-        <Icon size={16} color="#8C8977" />
+        <Icon size={16} color="var(--text-muted)" />
         <input
           {...props}
-          className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
-          style={{ color: "#2C2C2A" }}
+          className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
+          style={{ color: "var(--text-primary)" }}
         />
         {trailing}
       </div>
@@ -249,7 +249,7 @@ function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
         value={stop.address}
         onChange={(e) => onChange({ address: e.target.value, coords: null })}
         trailing={
-          <button type="button" onClick={onRemove} className="shrink-0 rounded-full p-1" style={{ color: "#B4B2A9" }} aria-label="Remove stop">
+          <button type="button" onClick={onRemove} className="shrink-0 rounded-full p-1" style={{ color: "var(--text-muted)" }} aria-label="Remove stop">
             <X size={13} />
           </button>
         }
@@ -257,22 +257,22 @@ function StopField({ stop, index, mapboxToken, onChange, onRemove }) {
       {suggestions.length > 0 && (
         <div
           className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl"
-          style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 8px 20px rgba(44,44,42,0.15)" }}
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-dropdown)" }}
         >
           {suggestions.map((s, i) => (
             <button
               key={i}
               type="button"
               onClick={() => pickSuggestion(s)}
-              className="block w-full px-4 py-2.5 text-left hover:bg-[#F0EEE7]"
+              className="block w-full px-4 py-2.5 text-left hover:bg-[var(--bg-card-alt)]"
             >
               {s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase()) ? (
                 <>
-                  <div className="text-xs font-semibold text-[#2C2C2A]">{s.name}</div>
-                  <div className="text-[11px] text-[#8C8977]">{s.fullAddress}</div>
+                  <div className="text-xs font-semibold text-[var(--text-primary)]">{s.name}</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">{s.fullAddress}</div>
                 </>
               ) : (
-                <div className="text-xs text-[#2C2C2A]">{s.fullAddress || s.name}</div>
+                <div className="text-xs text-[var(--text-primary)]">{s.fullAddress || s.name}</div>
               )}
             </button>
           ))}
@@ -579,7 +579,7 @@ export default function PassengerBooking({
   return (
     <div
       className="mx-auto w-full max-w-[400px] p-5"
-      style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}
+      style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}
     >
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between">
@@ -587,59 +587,59 @@ export default function PassengerBooking({
           <div
             className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
             style={{
-              background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)",
-              boxShadow: "3px 3px 8px rgba(44,44,42,0.14), -2px -2px 6px rgba(255,255,255,0.9)",
+              background: "linear-gradient(155deg, var(--bg-input), var(--bg-card-alt))",
+              boxShadow: "var(--shadow-btn)",
             }}
           >
             {driverPhotoUrl ? (
               <img src={driverPhotoUrl} alt={businessName || "Driver"} className="h-full w-full object-cover" />
             ) : (
-              <Navigation size={17} color="#185FA5" />
+              <Navigation size={17} color="var(--accent)" />
             )}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+              <span className="text-sm font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
                 {businessName || "Loading…"}
               </span>
               {licenceVerified && (
                 <span
                   className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5"
-                  style={{ background: "#EAF3DE" }}
+                  style={{ background: "var(--success-bg)" }}
                   title="This driver's SPSV licence has been verified against the National Transport Authority's public register"
                 >
-                  <ShieldCheck size={10} color="#27500A" />
-                  <span className="text-[9px] font-semibold" style={{ color: "#27500A" }}>Verified</span>
+                  <ShieldCheck size={10} color="var(--success-text)" />
+                  <span className="text-[9px] font-semibold" style={{ color: "var(--success-text)" }}>Verified</span>
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-[#5F5E5A]">Dublin, IE</div>
+            <div className="text-[11px] text-[var(--text-secondary)]">Dublin, IE</div>
           </div>
         </div>
         <button
           onClick={onOpenAccount}
           className="flex h-11 w-11 items-center justify-center rounded-full"
           style={{
-            background: "#F0EEE7",
-            boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)",
+            background: "var(--bg-card-alt)",
+            boxShadow: "var(--shadow-btn)",
           }}
           aria-label="Sign in / account"
         >
-          <User size={15} color="#5F5E5A" />
+          <User size={15} color="var(--text-secondary)" />
         </button>
       </div>
 
       {/* Hero */}
       <div className="mb-5">
         <div
-          className="text-2xl leading-tight text-[#2C2C2A]"
+          className="text-2xl leading-tight text-[var(--text-primary)]"
           style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}
         >
           Book your ride,
           <br />
           ahead of time.
         </div>
-        <div className="mt-1.5 text-sm text-[#5F5E5A]">
+        <div className="mt-1.5 text-sm text-[var(--text-secondary)]">
           Pre-book with {businessName ? businessName.split(" ")[0] : "your driver"} — no app to download, just a quick form.
         </div>
       </div>
@@ -652,45 +652,45 @@ export default function PassengerBooking({
         onClick={onOpenDriverProfile}
         className="mb-5 flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left"
         style={{
-          background: "#FBFAF6",
-          border: "1px solid #ECE9E0",
-          boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-card)",
+          boxShadow: "var(--shadow-raised)",
         }}
       >
         <div
           className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full"
           style={{
-            background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)",
-            boxShadow: "3px 3px 8px rgba(44,44,42,0.14), -2px -2px 6px rgba(255,255,255,0.9)",
+            background: "linear-gradient(155deg, var(--bg-input), var(--bg-card-alt))",
+            boxShadow: "var(--shadow-btn)",
           }}
         >
           {vehiclePhotoUrl ? (
             <img src={vehiclePhotoUrl} alt="Vehicle" className="h-full w-full object-cover" />
           ) : (
-            <Car size={19} color="#185FA5" />
+            <Car size={19} color="var(--accent)" />
           )}
         </div>
         <div className="flex-1">
-          <div className="text-sm font-medium text-[#2C2C2A]">
+          <div className="text-sm font-medium text-[var(--text-primary)]">
             {vehicle ? `${vehicle.make} ${vehicle.model} · ${vehicle.color}` : "Vehicle details unavailable"}
           </div>
-          <div className="flex items-center gap-1 text-xs text-[#5F5E5A]">
+          <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
             <Users size={12} /> {vehicle?.seats ?? "—"} passenger seats
           </div>
         </div>
         <div
           className="flex items-center gap-1 rounded-full px-2.5 py-1"
-          style={{ background: avgRating ? "#EAF3DE" : "#F1EFE8" }}
+          style={{ background: avgRating ? "var(--success-bg)" : "var(--bg-card-alt)" }}
         >
           {avgRating ? (
             <>
-              <Star size={12} fill="#639922" color="#639922" />
-              <span className="text-xs font-medium" style={{ color: "#27500A" }}>
-                {avgRating} <span style={{ color: "#5F5E5A", fontWeight: 400 }}>({reviewCount})</span>
+              <Star size={12} fill="var(--success-text)" color="var(--success-text)" />
+              <span className="text-xs font-medium" style={{ color: "var(--success-text)" }}>
+                {avgRating} <span style={{ color: "var(--text-secondary)", fontWeight: 400 }}>({reviewCount})</span>
               </span>
             </>
           ) : (
-            <span className="text-xs font-medium text-[#5F5E5A]">New driver</span>
+            <span className="text-xs font-medium text-[var(--text-secondary)]">New driver</span>
           )}
         </div>
       </button>
@@ -702,8 +702,8 @@ export default function PassengerBooking({
         <div className="mb-5 flex gap-2">
           <a
             href={`tel:${phoneLinks.tel}`}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-[#2C2C2A]"
-            style={{ background: "#F0EEE7", boxShadow: "2px 2px 5px rgba(44,44,42,0.1), -2px -2px 5px rgba(255,255,255,0.7)" }}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-[var(--text-primary)]"
+            style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
           >
             <Phone size={13} /> Call {businessName ? businessName.split(" ")[0] : "driver"}
           </a>
@@ -725,9 +725,9 @@ export default function PassengerBooking({
       <div
         className="rounded-2xl p-5"
         style={{
-          background: "#FBFAF6",
-          border: "1px solid #ECE9E0",
-          boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-card)",
+          boxShadow: "var(--shadow-raised)",
         }}
       >
         <div className="space-y-3.5">
@@ -777,7 +777,7 @@ export default function PassengerBooking({
                     }
                   }}
                   className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
-                  style={{ background: "#E4E2DA", color: "#2C2C2A" }}
+                  style={{ background: "var(--border-input)", color: "var(--text-primary)" }}
                 >
                   <MapPin size={11} /> {loc.label}
                 </button>
@@ -805,7 +805,7 @@ export default function PassengerBooking({
                       }}
                       title="Save this address"
                       className="flex items-center justify-center rounded-full p-1.5"
-                      style={{ background: "#E4E2DA", color: "#185FA5" }}
+                      style={{ background: "var(--border-input)", color: "var(--accent)" }}
                     >
                       <BookmarkPlus size={12} />
                     </button>
@@ -814,7 +814,7 @@ export default function PassengerBooking({
                     type="button"
                     onClick={useCurrentLocation}
                     className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
-                    style={{ background: "#E4E2DA", color: "#185FA5" }}
+                    style={{ background: "var(--border-input)", color: "var(--accent)" }}
                   >
                     {locating ? <Loader2 size={12} className="animate-spin" /> : <LocateFixed size={12} />}
                     {locating ? "Locating…" : "Use current"}
@@ -825,29 +825,29 @@ export default function PassengerBooking({
             {pickupSuggestions.length > 0 && (
               <div
                 className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl"
-                style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 8px 20px rgba(44,44,42,0.15)" }}
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-dropdown)" }}
               >
                 {pickupSuggestions.map((s, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => pickPickupSuggestion(s)}
-                    className="block w-full px-4 py-2.5 text-left hover:bg-[#F0EEE7]"
+                    className="block w-full px-4 py-2.5 text-left hover:bg-[var(--bg-card-alt)]"
                   >
                     {s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase()) ? (
                       <>
-                        <div className="text-xs font-semibold text-[#2C2C2A]">{s.name}</div>
-                        <div className="text-[11px] text-[#8C8977]">{s.fullAddress}</div>
+                        <div className="text-xs font-semibold text-[var(--text-primary)]">{s.name}</div>
+                        <div className="text-[11px] text-[var(--text-muted)]">{s.fullAddress}</div>
                       </>
                     ) : (
-                      <div className="text-xs text-[#2C2C2A]">{s.fullAddress || s.name}</div>
+                      <div className="text-xs text-[var(--text-primary)]">{s.fullAddress || s.name}</div>
                     )}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          {locationError && <div className="text-[11px] text-[#A32D2D]">{locationError}</div>}
+          {locationError && <div className="text-[11px] text-[var(--error-text)]">{locationError}</div>}
 
           {stops.map((stop, i) => (
             <StopField
@@ -864,7 +864,7 @@ export default function PassengerBooking({
               type="button"
               onClick={addStop}
               className="flex items-center gap-1.5 self-start text-xs font-semibold"
-              style={{ color: "#185FA5" }}
+              style={{ color: "var(--accent)" }}
             >
               <Plus size={13} /> Add a stop
             </button>
@@ -890,7 +890,7 @@ export default function PassengerBooking({
                     }}
                     title="Save this address"
                     className="flex shrink-0 items-center justify-center rounded-full p-1.5"
-                    style={{ background: "#E4E2DA", color: "#185FA5" }}
+                    style={{ background: "var(--border-input)", color: "var(--accent)" }}
                   >
                     <BookmarkPlus size={12} />
                   </button>
@@ -900,22 +900,22 @@ export default function PassengerBooking({
             {dropoffSuggestions.length > 0 && (
               <div
                 className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl"
-                style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "0 8px 20px rgba(44,44,42,0.15)" }}
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-dropdown)" }}
               >
                 {dropoffSuggestions.map((s, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => pickDropoffSuggestion(s)}
-                    className="block w-full px-4 py-2.5 text-left hover:bg-[#F0EEE7]"
+                    className="block w-full px-4 py-2.5 text-left hover:bg-[var(--bg-card-alt)]"
                   >
                     {s.name && s.fullAddress && !s.fullAddress.toLowerCase().includes(s.name.toLowerCase()) ? (
                       <>
-                        <div className="text-xs font-semibold text-[#2C2C2A]">{s.name}</div>
-                        <div className="text-[11px] text-[#8C8977]">{s.fullAddress}</div>
+                        <div className="text-xs font-semibold text-[var(--text-primary)]">{s.name}</div>
+                        <div className="text-[11px] text-[var(--text-muted)]">{s.fullAddress}</div>
                       </>
                     ) : (
-                      <div className="text-xs text-[#2C2C2A]">{s.fullAddress || s.name}</div>
+                      <div className="text-xs text-[var(--text-primary)]">{s.fullAddress || s.name}</div>
                     )}
                   </button>
                 ))}
@@ -923,7 +923,7 @@ export default function PassengerBooking({
             )}
           </div>
           {addressSearchError && (
-            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
               <AlertCircle size={11} /> {addressSearchError}
             </div>
           )}
@@ -951,12 +951,12 @@ export default function PassengerBooking({
             />
           </div>
           {checkingSlot && (
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#8C8977]">
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
               <Loader2 size={11} className="animate-spin" /> Checking availability for that time…
             </div>
           )}
           {!checkingSlot && !slotAvailable && date && time && (
-            <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "#A32D2D" }}>
+            <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "var(--error-text)" }}>
               <AlertCircle size={11} /> This driver already has a booking around that time — try a different time.
             </div>
           )}
@@ -971,7 +971,7 @@ export default function PassengerBooking({
           />
         )}
 
-        {formError && <div className="mt-3 text-[11px] text-[#A32D2D]">{formError}</div>}
+        {formError && <div className="mt-3 text-[11px] text-[var(--error-text)]">{formError}</div>}
 
         <button
           type="button"
@@ -982,10 +982,10 @@ export default function PassengerBooking({
           onMouseLeave={() => setPressed(false)}
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-70"
           style={{
-            background: "linear-gradient(135deg, #378ADD, #0C447C)",
+            background: "var(--accent-gradient)",
             boxShadow: pressed
-              ? "inset 2px 2px 5px rgba(4,44,83,0.5), inset -2px -2px 4px rgba(133,183,235,0.35)"
-              : "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+              ? "var(--shadow-accent-btn-pressed)"
+              : "var(--shadow-accent-btn)",
             transform: pressed ? "translateY(1px)" : "translateY(0)",
             transition: "box-shadow 0.12s ease, transform 0.08s ease",
           }}
@@ -1006,7 +1006,7 @@ export default function PassengerBooking({
         </button>
       </div>
 
-      <div className="mt-4 text-center text-[11px] text-[#8C8977]">
+      <div className="mt-4 text-center text-[11px] text-[var(--text-muted)]">
         No account needed to book — sign up after to save your trip history.
       </div>
     </div>

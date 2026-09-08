@@ -33,6 +33,9 @@
   --shadow-raised: 6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85);
   --shadow-btn: 3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85);
   --shadow-inset: inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8);
+  --shadow-dropdown: 0 8px 20px rgba(44,44,42,0.15);
+  --shadow-accent-btn: 3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5);
+  --shadow-accent-btn-pressed: inset 2px 2px 5px rgba(4,44,83,0.5), inset -2px -2px 4px rgba(133,183,235,0.35);
 }
 
 [data-theme="dark"] {
@@ -58,5 +61,8 @@
   --shadow-raised: 6px 6px 14px rgba(0,0,0,0.35), -2px -2px 8px rgba(255,255,255,0.02);
   --shadow-btn: 3px 3px 6px rgba(0,0,0,0.4), -1px -1px 4px rgba(255,255,255,0.03);
   --shadow-inset: inset 2px 2px 5px rgba(0,0,0,0.4), inset -1px -1px 3px rgba(255,255,255,0.02);
+  --shadow-dropdown: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-accent-btn: 3px 3px 10px rgba(46,217,168,0.25), -1px -1px 4px rgba(46,217,168,0.08);
+  --shadow-accent-btn-pressed: inset 2px 2px 5px rgba(0,0,0,0.4), inset -1px -1px 3px rgba(46,217,168,0.1);
 }
 
