@@ -1008,7 +1008,7 @@ function AppInner() {
         }
       });
     }
-    go("payment");
+    go(result.clientSecret ? "payment" : customerSession?.customer ? "status" : "guest-choice");
   }
 
   function handleViewBooking() {

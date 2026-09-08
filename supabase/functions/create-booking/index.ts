@@ -43,6 +43,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
 import { getDriverAvailability } from "../_shared/driverAvailability.ts";
+import { sendPushToTarget } from "../_shared/pushSender.ts";
 import {
   getTariffPeriod,
   calculateFare,
@@ -125,7 +126,7 @@ Deno.serve(async (req) => {
     // ---- Look up the driver (must exist and be active) ----
     const { data: driver, error: driverError } = await supabase
       .from("drivers")
-      .select("id, is_active, stripe_connect_account_id, stripe_connect_onboarded, pre_booking_fee, pay_later_deposit_amount")
+      .select("id, is_active, stripe_connect_account_id, stripe_connect_onboarded, pre_booking_fee, pay_later_deposit_amount, deposit_enabled")
       .eq("id", body.driver_id)
       .single();
 
@@ -326,15 +327,22 @@ Deno.serve(async (req) => {
 
     // ---- Work out what's actually charged now vs owed later ----
     const payLater = body.payment_timing === "later";
-    const depositAmount = payLater ? Number(driver.pay_later_deposit_amount) : 0;
+    // A driver-controlled toggle — off means a cash booking has ZERO
+    // upfront charge at all, not just a smaller one. Defaults to true
+    // in the database, so every driver's existing behavior is
+    // unaffected unless they explicitly turn this off.
+    const depositDisabled = payLater && driver.deposit_enabled === false;
+    const depositAmount = payLater && !depositDisabled ? Number(driver.pay_later_deposit_amount) : 0;
     const chargeNowAmount = payLater ? depositAmount : discountedTotal;
     const balanceDue = payLater ? Math.round((discountedTotal - depositAmount) * 100) / 100 : null;
+    const skipStripeEntirely = payLater && depositDisabled;
 
-    if (payLater && depositAmount >= discountedTotal) {
+    if (payLater && !depositDisabled && depositAmount >= discountedTotal) {
       // Edge case: a very short/cheap trip (or a steep discount) where
       // the deposit would cover (or exceed) the whole fare. Don't
       // charge more than the fare, and don't create a confusing
-      // zero/negative balance_due.
+      // zero/negative balance_due. Only relevant when a deposit is
+      // actually being charged at all.
       return jsonError(
         "This trip's estimated fare is too low for pay-later — please choose pay now instead",
         400
@@ -365,21 +373,30 @@ Deno.serve(async (req) => {
     const receiptEmail =
       body.passenger_email && emailPattern.test(body.passenger_email) ? body.passenger_email : undefined;
 
-    // A pay-later deposit still goes through Connect the same way a full
-    // fare does — it's real money changing hands now, just a smaller
-    // amount, and the driver still owes the platform its cut of it.
-    //
-    // receipt_email: if provided, Stripe automatically emails a receipt
-    // once this PaymentIntent succeeds — no separate email-sending code
-    // needed on our side. See https://docs.stripe.com/receipts.
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: chargeNowCents,
-      currency: "eur",
-      application_fee_amount: applicationFeeCents,
-      transfer_data: { destination: driver.stripe_connect_account_id },
-      receipt_email: receiptEmail,
-      metadata: { payment_purpose: payLater ? "pay_later_deposit" : "full_fare" },
-    });
+    // When the driver has disabled deposits, a cash booking has
+    // nothing at all to charge right now — Stripe doesn't support (and
+    // there's no reason to attempt) a real PaymentIntent for zero
+    // euros. paymentIntent stays null for this specific case; every
+    // other path (pay-now, or pay-later with a real deposit) is
+    // completely unchanged from before.
+    let paymentIntent: Stripe.PaymentIntent | null = null;
+    if (!skipStripeEntirely) {
+      // A pay-later deposit still goes through Connect the same way a full
+      // fare does — it's real money changing hands now, just a smaller
+      // amount, and the driver still owes the platform its cut of it.
+      //
+      // receipt_email: if provided, Stripe automatically emails a receipt
+      // once this PaymentIntent succeeds — no separate email-sending code
+      // needed on our side. See https://docs.stripe.com/receipts.
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: chargeNowCents,
+        currency: "eur",
+        application_fee_amount: applicationFeeCents,
+        transfer_data: { destination: driver.stripe_connect_account_id },
+        receipt_email: receiptEmail,
+        metadata: { payment_purpose: payLater ? "pay_later_deposit" : "full_fare" },
+      });
+    }
 
     // ---- Now insert the booking ONCE, with the PaymentIntent id already attached ----
     const { data: booking, error: bookingError } = await supabase
@@ -411,7 +428,14 @@ Deno.serve(async (req) => {
         // becomes "pending" only once confirm-booking-payment verifies
         // with Stripe that payment actually succeeded. See the
         // BOOKING VISIBILITY note at the top of this file.
-        status: "awaiting_payment",
+        //
+        // EXCEPTION: when there's no payment happening at all (deposit
+        // disabled for a cash booking), there's nothing for
+        // confirm-booking-payment to ever confirm — so this goes
+        // straight to "pending" here instead, with the driver notified
+        // directly below, replicating exactly what
+        // confirm-booking-payment would otherwise have done.
+        status: skipStripeEntirely ? "pending" : "awaiting_payment",
         payment_status: "unpaid",
         payment_timing: body.payment_timing,
         // For "later" bookings, payment_method/balance_collected are set
@@ -422,10 +446,10 @@ Deno.serve(async (req) => {
         payment_method: payLater ? null : "card",
         balance_collected: payLater ? false : true,
         deposit_amount: depositAmount,
-        deposit_payment_status: "unpaid",
-        deposit_stripe_payment_intent_id: payLater ? paymentIntent.id : null,
+        deposit_payment_status: skipStripeEntirely ? "not_required" : "unpaid",
+        deposit_stripe_payment_intent_id: payLater && paymentIntent ? paymentIntent.id : null,
         balance_due: balanceDue,
-        stripe_payment_intent_id: payLater ? null : paymentIntent.id,
+        stripe_payment_intent_id: !payLater && paymentIntent ? paymentIntent.id : null,
       })
       .select("id, access_token")
       .single();
@@ -433,10 +457,13 @@ Deno.serve(async (req) => {
     if (bookingError || !booking) {
       // Booking insert failed AFTER Stripe succeeded — cancel the
       // now-orphaned PaymentIntent rather than leaving it dangling
-      // indefinitely in the Stripe dashboard.
-      await stripe.paymentIntents.cancel(paymentIntent.id).catch((cancelErr) => {
-        console.error("Failed to cancel orphaned PaymentIntent:", cancelErr);
-      });
+      // indefinitely in the Stripe dashboard. Nothing to cancel at all
+      // if no PaymentIntent was created in the first place.
+      if (paymentIntent) {
+        await stripe.paymentIntents.cancel(paymentIntent.id).catch((cancelErr) => {
+          console.error("Failed to cancel orphaned PaymentIntent:", cancelErr);
+        });
+      }
       console.error("Booking insert failed:", bookingError);
       return jsonError(
         `Couldn't create the booking: ${bookingError?.message || "unknown database error"}`,
@@ -447,9 +474,25 @@ Deno.serve(async (req) => {
     // Attach the booking id back onto the PaymentIntent's metadata, now
     // that we know it — a nice-to-have for reconciliation in the
     // Stripe dashboard, not required for the booking flow to work.
-    await stripe.paymentIntents.update(paymentIntent.id, {
-      metadata: { booking_id: booking.id, payment_purpose: payLater ? "pay_later_deposit" : "full_fare" },
-    });
+    // Nothing to attach it to if there's no PaymentIntent at all.
+    if (paymentIntent) {
+      await stripe.paymentIntents.update(paymentIntent.id, {
+        metadata: { booking_id: booking.id, payment_purpose: payLater ? "pay_later_deposit" : "full_fare" },
+      });
+    }
+
+    // No payment step means no confirm-booking-payment call is ever
+    // coming for this booking — replicate the one thing that function
+    // would otherwise have done: telling the driver a new ride showed
+    // up. Fire-and-forget, exactly like every other push send in this
+    // codebase — never blocks or fails the booking response.
+    if (skipStripeEntirely) {
+      sendPushToTarget(
+        supabase,
+        { type: "driver", driverId: body.driver_id },
+        { title: "New ride request", body: `Pickup: ${body.pickup_address}`, url: "/?screen=bookings" }
+      );
+    }
 
     // Fire-and-forget: bump the promo's usage counter now that it's
     // actually been used. Doesn't fail or roll back the booking if
@@ -468,7 +511,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         bookingId: booking.id,
         accessToken: booking.access_token,
-        clientSecret: paymentIntent.client_secret,
+        clientSecret: paymentIntent?.client_secret ?? null,
         fare,
         discountAmount: promoDiscountAmount,
         finalTotal: discountedTotal,
