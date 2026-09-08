@@ -20,6 +20,7 @@ import { listRecurringRides, addRecurringRide, toggleRecurringRide, deleteRecurr
 import PromoCodesScreen from "./PromoCodesScreen.jsx";
 import { getActivePromo, listMyPromos } from "./promoApi.js";
 import { ThemeProvider } from "./ThemeContext.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 // Fallback coordinates (Dublin) — only used before the passenger has
 // submitted the booking form, so the fare screen has something to
@@ -1076,29 +1077,35 @@ function AppInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5]">
+    <div className="min-h-screen" style={{ background: "var(--bg-page)" }}>
       {/* Mobile: hamburger bar */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-[#ECE9E0] bg-[#F7F7F5]/95 px-4 py-3 backdrop-blur-md sm:hidden">
-        <span className="text-sm font-semibold text-[#2C2C2A]">{currentLabel}</span>
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Toggle screen menu"
-          className="flex h-11 w-11 items-center justify-center rounded-lg"
-          style={{ background: "#F0EEE7", color: "#2C2C2A" }}
-        >
-          {menuOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
+      <div
+        className="sticky top-0 z-40 flex items-center justify-between border-b px-4 py-3 backdrop-blur-md sm:hidden"
+        style={{ borderColor: "var(--border-card)", background: "color-mix(in srgb, var(--bg-page) 95%, transparent)" }}
+      >
+        <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{currentLabel}</span>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Toggle screen menu"
+            className="flex h-11 w-11 items-center justify-center rounded-lg"
+            style={{ background: "var(--bg-card-alt)", color: "var(--text-primary)" }}
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </div>
       {menuOpen && (
-        <div className="sticky top-[57px] z-30 flex flex-col gap-2 border-b border-[#ECE9E0] bg-[#F7F7F5] p-3 sm:hidden">
+        <div className="sticky top-[57px] z-30 flex flex-col gap-2 border-b p-3 sm:hidden" style={{ borderColor: "var(--border-card)", background: "var(--bg-page)" }}>
           {SCREENS.map((s) => (
             <button
               key={s.id}
               onClick={() => selectScreen(s.id)}
               className="rounded-lg px-4 py-3.5 text-left text-sm font-medium"
               style={{
-                background: screen === s.id ? "#185FA5" : "#F0EEE7",
-                color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
+                background: screen === s.id ? "var(--accent)" : "var(--bg-card-alt)",
+                color: screen === s.id ? "white" : "var(--text-secondary)",
               }}
             >
               {s.label}
@@ -1108,20 +1115,24 @@ function AppInner() {
       )}
 
       {/* Desktop / tablet: row of tabs */}
-      <div className="sticky top-0 z-40 hidden flex-wrap justify-center gap-2.5 border-b border-[#ECE9E0] bg-[#F7F7F5]/90 p-4 backdrop-blur-md sm:flex">
+      <div
+        className="sticky top-0 z-40 hidden flex-wrap items-center justify-center gap-2.5 border-b p-4 backdrop-blur-md sm:flex"
+        style={{ borderColor: "var(--border-card)", background: "color-mix(in srgb, var(--bg-page) 90%, transparent)" }}
+      >
         {SCREENS.map((s) => (
           <button
             key={s.id}
             onClick={() => go(s.id)}
             className="rounded-lg px-4 py-2.5 text-sm font-medium"
             style={{
-              background: screen === s.id ? "#185FA5" : "#F0EEE7",
-              color: screen === s.id ? "#FFFFFF" : "#5F5E5A",
+              background: screen === s.id ? "var(--accent)" : "var(--bg-card-alt)",
+              color: screen === s.id ? "white" : "var(--text-secondary)",
             }}
           >
             {s.label}
           </button>
         ))}
+        <ThemeToggle />
       </div>
 
       <div className="py-6">

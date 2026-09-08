@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Tag, Copy, Check, Loader2, AlertCircle, Gift, Ticket } from "lucide-react";
 import { listMyPromos, lookupPromoCode } from "./promoApi.js";
-import ThemeToggle from "./ThemeToggle.jsx";
 
 // Restyled to match the reference layout (redeem-code input up top,
 // active offers as a clear card list) and to respond to the light/dark
@@ -164,7 +163,7 @@ export default function PromoCodesScreen({ driverId, customerSessionToken, onBac
           <ArrowRight size={15} color="var(--text-secondary)" style={{ transform: "rotate(180deg)" }} />
         </button>
         <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Promo codes</div>
-        <ThemeToggle />
+        <div className="w-9" />
       </div>
 
       {/* Redeem a code — real functionality, calls the same

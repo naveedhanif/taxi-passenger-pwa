@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2, Car, Tag } from "lucide-react";
 import { enablePushNotifications, getPushPermissionState, isPushSupported, isIosNonStandalone } from "./pushNotifications.js";
-import ThemeToggle from "./ThemeToggle.jsx";
 
 // Inlined from bookingHistory.js (tested separately — see that file for
 // the test suite). Artifact preview can't import local files, so this
@@ -207,7 +206,6 @@ export default function AccountHistoryScreen({
           <ArrowLeft size={15} color="var(--text-secondary)" />
         </button>
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           {onUpdateProfile && !editingProfile && (
             <button
               onClick={startEditingProfile}
