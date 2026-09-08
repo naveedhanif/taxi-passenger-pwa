@@ -174,9 +174,16 @@ export default function AccountHistoryScreen({
         >
           <ArrowLeft size={15} color="#5F5E5A" />
         </button>
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
           <User size={22} color="#8C8977" />
           <div className="text-sm text-[#5F5E5A]">Sign in to see your account and booking history.</div>
+          <button
+            onClick={() => onNavigate("auth")}
+            className="mt-1 rounded-full px-5 py-2.5 text-xs font-semibold text-white"
+            style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+          >
+            Sign in
+          </button>
         </div>
       </div>
     );
