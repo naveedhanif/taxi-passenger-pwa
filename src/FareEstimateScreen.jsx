@@ -46,6 +46,7 @@ export default function FareEstimateScreen({
   fareRules,
   preBookingFee,
   payLaterDepositAmount,
+  depositEnabled = true,
   promo = null,
   onConfirm,
   onBack,
@@ -374,15 +375,21 @@ export default function FareEstimateScreen({
               >
                 <Banknote size={16} color={paymentTiming === "later" ? "#185FA5" : "#5F5E5A"} />
                 <span className="text-xs font-semibold text-[#2C2C2A]">Pay in the taxi</span>
-                <span className="text-[11px] text-[#5F5E5A]">Cash or card after the ride</span>
+                <span className="text-[11px] text-[#5F5E5A]">{depositEnabled ? "Cash or card after the ride" : "No deposit — pay after the ride"}</span>
               </button>
             </div>
 
-            {paymentTiming === "later" && (
+            {paymentTiming === "later" && depositEnabled && (
               <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "#FAEEDA", color: "#633806" }}>
                 A €{payLaterDepositAmount.toFixed(2)} deposit is charged now to secure your booking. It's
                 subtracted from the fare — you'll owe €{Math.max(displayTotal - payLaterDepositAmount, 0).toFixed(2)} more,
                 payable to the driver by cash or card once the trip is complete.
+              </div>
+            )}
+            {paymentTiming === "later" && !depositEnabled && (
+              <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "#EAF3DE", color: "#27500A" }}>
+                No deposit required — nothing is charged now. You'll pay the full fare of €{displayTotal.toFixed(2)} directly to
+                your driver by cash or card once the trip is complete.
               </div>
             )}
           </div>
@@ -394,7 +401,7 @@ export default function FareEstimateScreen({
                 fare,
                 tariffPeriod,
                 paymentTiming,
-                depositAmount: paymentTiming === "later" ? payLaterDepositAmount : 0,
+                depositAmount: paymentTiming === "later" && depositEnabled ? payLaterDepositAmount : 0,
                 promoCodeId: effectivePromo?.id ?? null,
               })
             }
@@ -406,7 +413,9 @@ export default function FareEstimateScreen({
           >
             {paymentTiming === "now"
               ? `Confirm & pay €${displayTotal.toFixed(2)}`
-              : `Confirm & pay deposit €${payLaterDepositAmount.toFixed(2)}`}
+              : depositEnabled
+              ? `Confirm & pay deposit €${payLaterDepositAmount.toFixed(2)}`
+              : "Confirm booking"}
             <ArrowRight size={15} />
           </button>
 

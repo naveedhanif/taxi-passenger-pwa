@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Menu, X, AlertCircle, Loader2, ArrowLeft, Home as HomeIcon, CheckCircle2 } from "lucide-react";
+import { Menu, X, AlertCircle, Loader2, ArrowLeft, Home as HomeIcon, CheckCircle2, Car, MapPin, Tag, User } from "lucide-react";
 import PassengerBooking from "./passenger-booking.jsx";
 import BookingStatus from "./passenger-booking-status.jsx";
 import FareEstimateScreen from "./FareEstimateScreen.jsx";
@@ -119,6 +119,7 @@ function AppInner() {
   const [fareRules, setFareRules] = useState([]);
   const [driverDataError, setDriverDataError] = useState("");
   const [payLaterDepositAmount, setPayLaterDepositAmount] = useState(5.0);
+  const [depositEnabled, setDepositEnabled] = useState(true);
   const [avgRating, setAvgRating] = useState(null);
   const [reviewCount, setReviewCount] = useState(0);
   const [licenceVerified, setLicenceVerified] = useState(false);
@@ -738,7 +739,7 @@ function AppInner() {
           .eq("is_active", true),
         supabase
           .from("public_driver_profiles")
-          .select("is_available, pay_later_deposit_amount, avg_rating, review_count, licence_verified, phone_number")
+          .select("is_available, pay_later_deposit_amount, deposit_enabled, avg_rating, review_count, licence_verified, phone_number")
           .eq("id", driverId)
           .maybeSingle(),
         getDriverOnlineStatus(driverId),
@@ -756,6 +757,7 @@ function AppInner() {
       if (!profileRes.error && profileRes.data) {
         setIsDriverAvailable(profileRes.data.is_available);
         setPayLaterDepositAmount(Number(profileRes.data.pay_later_deposit_amount ?? 5));
+        setDepositEnabled(profileRes.data.deposit_enabled !== false);
         setAvgRating(profileRes.data.avg_rating != null ? Number(profileRes.data.avg_rating) : null);
         setReviewCount(Number(profileRes.data.review_count ?? 0));
         setLicenceVerified(Boolean(profileRes.data.licence_verified));
@@ -1135,7 +1137,7 @@ function AppInner() {
         <ThemeToggle />
       </div>
 
-      <div className="py-6">
+      <div className="py-6 pb-24 sm:pb-6">
         <audio ref={statusAudioRef} src="/status-update-chime.wav" preload="auto" />
         <audio ref={promoAudioRef} src="/promo-received.wav" preload="auto" />
         {statusAlert && (
@@ -1264,6 +1266,7 @@ function AppInner() {
             fareRules={fareRules}
             preBookingFee={3.0}
             payLaterDepositAmount={payLaterDepositAmount}
+            depositEnabled={depositEnabled}
             promo={activePromo}
             onConfirm={handleConfirmFare}
             onBack={() => go("booking")}
@@ -1474,11 +1477,14 @@ function AppInner() {
         </button>
       )}
 
-      {/* TEMPORARY diagnostic badge — remove once the notification bug
-          is confirmed fixed. Shows exactly what the last poll attempt
-          did (success/failure, auth mode used, status comparison) so
-          it can be screenshotted instead of guessed at. */}
-      {pollDebug && (
+      {/* Diagnostic badge — dev-only now. Was unconditionally visible to
+          every real passenger, marked "temporary, remove once the
+          notification bug is confirmed fixed" and never actually
+          gated — same class of issue already found and fixed on the
+          driver app. The bug it was tracking is confirmed fixed by now
+          (extensive real testing since). Kept for local debugging,
+          just no longer shown in production. */}
+      {import.meta.env.DEV && pollDebug && (
         <div
           className="fixed top-2 left-2 right-2 z-50 rounded-lg p-2 text-[10px] font-mono leading-tight"
           style={{ background: "#2C2C2A", color: "#F0EEE7" }}
@@ -1495,13 +1501,34 @@ function AppInner() {
         </div>
       )}
 
-      {/* Version badge — small, fixed, out of the way. Exists purely so
-          you can glance at the app and confirm which deployed commit
-          you're actually testing, rather than guessing from the UI or
-          re-checking Vercel's dashboard every time. Tap it to copy the
-          full commit SHA (useful when reporting a bug tied to an exact
-          build). See vite.config.ts for how these values are injected. */}
-      <VersionBadge />
+      {/* Mobile bottom nav — desktop keeps the existing top tab row
+          unchanged; this is purely additive for small screens. Same
+          4 real destinations already defined in SCREENS, not a
+          separate invented set. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
+        style={{ background: "var(--bg-card)", borderColor: "var(--border-card)", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+      >
+        {SCREENS.map((s) => {
+          const Icon = s.id === "booking" ? Car : s.id === "status" ? MapPin : s.id === "promos" ? Tag : User;
+          const shortLabel = s.id === "booking" ? "Book" : s.id === "status" ? "Track" : s.id === "promos" ? "Promos" : "Account";
+          const isActive = screen === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => go(s.id)}
+              className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium"
+              style={{ color: isActive ? "var(--accent)" : "var(--text-muted)" }}
+            >
+              <Icon size={20} />
+              {shortLabel}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Version badge — dev-only now, same reasoning as above. */}
+      {import.meta.env.DEV && <VersionBadge />}
     </div>
   );
 }
