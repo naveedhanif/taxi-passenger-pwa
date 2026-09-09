@@ -24,7 +24,7 @@
  * @param {string|null} [params.promoCodeId] - from get-active-promo's display-only lookup; re-validated server-side regardless
  * @returns {Promise<{bookingId, accessToken, clientSecret, fare, discountAmount, finalTotal, distanceKm, durationMinutes, tariffPeriod, paymentTiming, depositAmount, balanceDue} | {error: string}>}
  */
-export async function createBooking({ driverId, passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, scheduledTime, paymentTiming, accessToken, promoCodeId }) {
+export async function createBooking({ driverId, passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, scheduledTime, paymentTiming, accessToken, promoCodeId, flightNumber }) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -53,6 +53,7 @@ export async function createBooking({ driverId, passengerName, passengerPhone, p
       scheduled_time: scheduledTime.toISOString(),
       payment_timing: paymentTiming || "now",
       promo_code_id: promoCodeId || null,
+      flight_number: flightNumber || null,
     }),
   });
 

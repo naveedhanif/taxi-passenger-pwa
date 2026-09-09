@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus, X, Plus } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus, X, Plus, Plane } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken, suggestionLabel } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
 import { formatPhoneForLinks } from "./phoneLinks.js";
@@ -397,6 +397,12 @@ export default function PassengerBooking({
   // made, per Mapbox's documented session-billing pattern.
   const [pickupSession, setPickupSession] = useState(() => createSearchSessionToken());
   const [dropoffSession, setDropoffSession] = useState(() => createSearchSessionToken());
+  // Optional — real flight-status lookup happens server-side once the
+  // booking is actually created (see create-booking's flight_number
+  // handling). Purely informational here; no validation of the number
+  // itself happens client-side, since the real check is what matters.
+  const [flightNumber, setFlightNumber] = useState("");
+  const [showFlightField, setShowFlightField] = useState(false);
 
   useEffect(() => {
     if (!mapboxToken) {
@@ -542,6 +548,7 @@ export default function PassengerBooking({
         .map((s) => ({ lat: s.coords.lat, lng: s.coords.lng, address: s.coords.fullAddress })),
       date,
       time,
+      flightNumber: flightNumber.trim() || null,
     });
   }
 
@@ -926,6 +933,30 @@ export default function PassengerBooking({
             <div className="mt-2 flex items-center gap-1.5 rounded-lg p-2 text-[11px]" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
               <AlertCircle size={11} /> {addressSearchError}
             </div>
+          )}
+
+          {showFlightField ? (
+            <EmbossField
+              icon={Plane}
+              label="Flight number (optional)"
+              placeholder="e.g. EI104"
+              value={flightNumber}
+              onChange={(e) => setFlightNumber(e.target.value.toUpperCase())}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowFlightField(true)}
+              className="flex items-center gap-1.5 self-start text-xs font-semibold"
+              style={{ color: "var(--accent)" }}
+            >
+              <Plane size={13} /> Add flight number
+            </button>
+          )}
+          {showFlightField && (
+            <p className="-mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+              If your flight's delayed, we'll automatically adjust your pickup time and let your driver know.
+            </p>
           )}
           <div className="grid grid-cols-2 gap-3">
             <EmbossField

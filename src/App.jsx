@@ -811,7 +811,7 @@ function AppInner() {
     };
   }, [driverId]);
 
-  async function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, date, time }) {
+  async function handleBookingFormSubmit({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops, date, time, flightNumber }) {
     // pickup/dropoff arrive already geocoded ({lat, lng, address}) — the
     // booking form resolves them via Mapbox before calling onSubmit.
     const scheduledTime = new Date(`${date}T${time}`);
@@ -840,7 +840,7 @@ function AppInner() {
       return;
     }
 
-    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops: stops || [], scheduledTime });
+    setFormSelection({ passengerName, passengerPhone, passengerEmail, pickup, dropoff, stops: stops || [], scheduledTime, flightNumber: flightNumber || null });
     go("fare");
   }
 
@@ -966,6 +966,7 @@ function AppInner() {
       // history could never show real past trips before.
       accessToken: customerSession?.accessToken || null,
       promoCodeId: promoCodeId || null,
+      flightNumber: formSelection?.flightNumber || null,
     });
 
     setCreatingBooking(false);

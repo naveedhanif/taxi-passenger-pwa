@@ -44,6 +44,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
 import { getDriverAvailability } from "../_shared/driverAvailability.ts";
 import { sendPushToTarget } from "../_shared/pushSender.ts";
+import { lookupFlightStatus } from "../_shared/flightStatus.ts";
 import {
   getTariffPeriod,
   calculateFare,
@@ -76,6 +77,7 @@ interface BookingRequest {
   stops?: { address: string; lat: number; lng: number }[];
   scheduled_time: string; // ISO string
   payment_timing: "now" | "later";
+  flight_number?: string | null; // optional — triggers a one-time real flight-status lookup, see below
   // Optional — from get-active-promo's display-only lookup. Re-validated
   // completely independently here; the client's claim about which promo
   // applies (or that one applies at all) is never trusted.
@@ -399,6 +401,20 @@ Deno.serve(async (req) => {
     }
 
     // ---- Now insert the booking ONCE, with the PaymentIntent id already attached ----
+    // ---- One-time real flight lookup, if a flight number was given ----
+    // Non-fatal by design: a passenger's booking must never fail just
+    // because a flight number was mistyped or the flight API is briefly
+    // down. Uses the booking's own scheduled date — matched against
+    // dropoff, since that's the airport-arrival side for a pickup-at-
+    // -airport trip. (If neither address is actually an airport, this
+    // lookup will simply come back "not found" and everything proceeds
+    // normally with no flight data attached.)
+    let flightLookup: Awaited<ReturnType<typeof lookupFlightStatus>> | null = null;
+    if (body.flight_number && body.flight_number.trim()) {
+      const dateLocal = new Date(body.scheduled_time).toISOString().slice(0, 10);
+      flightLookup = await lookupFlightStatus(body.flight_number.trim(), dateLocal);
+    }
+
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .insert({
@@ -416,6 +432,11 @@ Deno.serve(async (req) => {
         stops: stops,
         scheduled_time: body.scheduled_time,
         distance_km: distanceKm,
+        flight_number: body.flight_number?.trim() || null,
+        flight_status: flightLookup?.status ?? null,
+        flight_scheduled_arrival: flightLookup?.scheduledArrivalUtc ?? null,
+        flight_revised_arrival: flightLookup?.revisedArrivalUtc ?? null,
+        flight_checked_at: flightLookup ? new Date().toISOString() : null,
         // Feeds busy_expires_at (a database trigger — see
         // set_booking_busy_expires_at) which auto-clears this booking's
         // hold on driver availability if the trip runs far past its

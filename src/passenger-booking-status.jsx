@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, MessageSquare, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check } from "lucide-react";
+import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, MessageSquare, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check, Plane } from "lucide-react";
 import { getBookingStatus, cancelBooking } from "./bookingStatusApi.js";
 import ModifyBookingScreen from "./ModifyBookingScreen.jsx";
 import { submitReview } from "./reviewApi.js";
@@ -567,6 +567,32 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           (not just when the sheet is open) so its polling — and the
           sound/vibrate/unread-dot it can trigger — keeps working
           whether or not the passenger currently has the sheet open. */}
+
+      {/* Flight status — only real data, only shown if a flight number
+          was actually given at booking time. flightStatus/flightRevisedArrival
+          come straight from get-booking-status, sourced from the real
+          AeroDataBox lookup (see _shared/flightStatus.ts), never fabricated. */}
+      {booking.flightNumber && (
+        <EmbossCard className="mb-4 p-4">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[#5F5E5A]">
+            <Plane size={13} /> Flight {booking.flightNumber}
+          </div>
+          {booking.flightStatus ? (
+            <>
+              <div className="text-sm font-semibold text-[#2C2C2A]">{booking.flightStatus}</div>
+              {booking.flightRevisedArrival && booking.flightScheduledArrival && booking.flightRevisedArrival !== booking.flightScheduledArrival && (
+                <div className="mt-1 text-[11px]" style={{ color: "#633806" }}>
+                  Revised arrival: {new Date(booking.flightRevisedArrival).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  {" "}(was {new Date(booking.flightScheduledArrival).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })})
+                  — your pickup time has been adjusted to match.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-[11px] text-[#8C8977]">We'll check this flight's status closer to your pickup time.</div>
+          )}
+        </EmbossCard>
+      )}
 
       {/* Trip details */}
       <EmbossCard className="mb-4 p-4">

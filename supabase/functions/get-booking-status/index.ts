@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select(
-        "id, driver_id, customer_id, access_token, passenger_name, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, stops, scheduled_time, status, estimated_fare, final_fare, payment_timing, deposit_amount, balance_due, payment_status, deposit_payment_status"
+        "id, driver_id, customer_id, access_token, passenger_name, pickup_address, pickup_lat, pickup_lng, dropoff_address, dropoff_lat, dropoff_lng, stops, scheduled_time, status, estimated_fare, final_fare, payment_timing, deposit_amount, balance_due, payment_status, deposit_payment_status, flight_number, flight_status, flight_scheduled_arrival, flight_revised_arrival"
       )
       .eq("id", body.booking_id)
       .single();
@@ -147,6 +147,10 @@ Deno.serve(async (req) => {
           dropoff: { address: booking.dropoff_address, lat: booking.dropoff_lat, lng: booking.dropoff_lng },
           stops: booking.stops ?? [],
           scheduledTime: booking.scheduled_time,
+          flightNumber: booking.flight_number,
+          flightStatus: booking.flight_status,
+          flightScheduledArrival: booking.flight_scheduled_arrival,
+          flightRevisedArrival: booking.flight_revised_arrival,
           status: booking.status,
           fare: booking.final_fare ?? booking.estimated_fare,
           isFinalFare: booking.final_fare != null,
