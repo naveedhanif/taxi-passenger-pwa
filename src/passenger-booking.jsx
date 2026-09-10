@@ -402,7 +402,8 @@ export default function PassengerBooking({
   // handling). Purely informational here; no validation of the number
   // itself happens client-side, since the real check is what matters.
   const [flightNumber, setFlightNumber] = useState("");
-  const [showFlightField, setShowFlightField] = useState(false);
+  const [flightModalOpen, setFlightModalOpen] = useState(false);
+  const [flightDraft, setFlightDraft] = useState("");
 
   useEffect(() => {
     if (!mapboxToken) {
@@ -935,28 +936,27 @@ export default function PassengerBooking({
             </div>
           )}
 
-          {showFlightField ? (
-            <EmbossField
-              icon={Plane}
-              label="Flight number (optional)"
-              placeholder="e.g. EI104"
-              value={flightNumber}
-              onChange={(e) => setFlightNumber(e.target.value.toUpperCase())}
-            />
+          {flightNumber ? (
+            <button
+              type="button"
+              onClick={() => { setFlightDraft(flightNumber); setFlightModalOpen(true); }}
+              className="flex items-center justify-between gap-2 rounded-xl p-3"
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)" }}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                <Plane size={14} style={{ color: "var(--accent)" }} /> Flight {flightNumber}
+              </span>
+              <span className="text-[11px] font-medium" style={{ color: "var(--accent)" }}>Edit</span>
+            </button>
           ) : (
             <button
               type="button"
-              onClick={() => setShowFlightField(true)}
+              onClick={() => { setFlightDraft(""); setFlightModalOpen(true); }}
               className="flex items-center gap-1.5 self-start text-xs font-semibold"
               style={{ color: "var(--accent)" }}
             >
               <Plane size={13} /> Add flight number
             </button>
-          )}
-          {showFlightField && (
-            <p className="-mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
-              If your flight's delayed, we'll automatically adjust your pickup time and let your driver know.
-            </p>
           )}
           <div className="grid grid-cols-2 gap-3">
             <EmbossField
@@ -1040,6 +1040,58 @@ export default function PassengerBooking({
       <div className="mt-4 text-center text-[11px] text-[var(--text-muted)]">
         No account needed to book — sign up after to save your trip history.
       </div>
+
+      {flightModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+          style={{ background: "rgba(0,0,0,0.4)" }}
+          onClick={() => setFlightModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[380px] rounded-t-2xl p-5 sm:rounded-2xl"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center gap-2 text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+              <Plane size={16} style={{ color: "var(--accent)" }} /> Flight details
+            </div>
+            <p className="mb-4 text-[11px]" style={{ color: "var(--text-muted)" }}>
+              If your flight's delayed, we'll automatically adjust your pickup time and let your driver know.
+            </p>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+              Flight number
+            </label>
+            <input
+              autoFocus
+              value={flightDraft}
+              onChange={(e) => setFlightDraft(e.target.value.toUpperCase())}
+              placeholder="e.g. EI104"
+              className="mb-4 w-full rounded-xl p-3 text-sm font-semibold outline-none"
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)", color: "var(--text-primary)" }}
+            />
+            <div className="flex gap-2.5">
+              {flightNumber && (
+                <button
+                  type="button"
+                  onClick={() => { setFlightNumber(""); setFlightModalOpen(false); }}
+                  className="rounded-xl px-4 py-3 text-xs font-semibold"
+                  style={{ background: "var(--bg-input)", color: "var(--error-text)" }}
+                >
+                  Remove
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setFlightNumber(flightDraft.trim()); setFlightModalOpen(false); }}
+                className="flex-1 rounded-xl py-3 text-sm font-semibold text-white"
+                style={{ background: "var(--accent-gradient)" }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
