@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         await sendPushToTarget(
           supabase,
           { type: "customer", customerId: booking.customer_id },
-          { title: "Your ride is coming up", body: `Pickup around ${pickupTime} at ${booking.pickup_address}.`, url: "/?screen=status" }
+          { title: "Your ride is coming up", body: `Pickup around ${pickupTime} at ${booking.pickup_address}.`, url: `/?screen=status&booking=${booking.id}` }
         );
       }
       // Guests have no persistent subscription to push to — no
@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
           await sendPushToTarget(
             supabase,
             { type: "customer", customerId: booking.customer_id },
-            { title: `Flight ${direction} ${minutesAbs} min`, body: `Your pickup has been adjusted to around ${newTimeLabel}.`, url: "/?screen=status" }
+            { title: `Flight ${direction} ${minutesAbs} min`, body: `Your pickup has been adjusted to around ${newTimeLabel}.`, url: `/?screen=status&booking=${booking.id}` }
           );
         }
         if (booking.driver_id) {

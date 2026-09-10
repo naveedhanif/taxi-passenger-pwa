@@ -169,7 +169,7 @@ function EmbossCard({ children, className = "" }) {
  * @param {function} props.onBack
  * @param {function} [props.onBookAgain]
  */
-export default function BookingStatus({ bookingId, guestAccessToken, customerSessionToken, isSharedView = false, onBack, onBookAgain }) {
+export default function BookingStatus({ bookingId, guestAccessToken, customerSessionToken, isSharedView = false, onBack, onBookAgain, autoOpenChat = false, onAutoOpenChatConsumed }) {
   useGoogleFont();
   const [data, setData] = useState(null); // { booking, driver, vehicle, position }
   const [loadError, setLoadError] = useState("");
@@ -221,6 +221,18 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const chatOpenRef = useRef(chatOpen);
   chatOpenRef.current = chatOpen;
+
+  useEffect(() => {
+    if (autoOpenChat) {
+      setChatOpen(true);
+      onAutoOpenChatConsumed?.();
+    }
+    // Only ever fires once, right when arriving from a chat-message
+    // notification — onAutoOpenChatConsumed resets the flag in the
+    // parent immediately, so this can't re-trigger and force chat back
+    // open every time the passenger closes it manually afterward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenChat]);
 
   const load = useCallback(async () => {
     if (!bookingId) return;

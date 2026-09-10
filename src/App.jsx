@@ -151,6 +151,7 @@ function AppInner() {
   // below. Display-only; create-booking re-validates it independently.
   const [activePromo, setActivePromo] = useState(null);
   const [referralCodeFromUrl, setReferralCodeFromUrl] = useState("");
+  const [autoOpenChat, setAutoOpenChat] = useState(false);
   const [resolvingSession, setResolvingSession] = useState(true);
   const authOriginRef = useRef("account"); // "account" | "post-booking"
 
@@ -712,6 +713,29 @@ function AppInner() {
       // happens from the URL alone.
       const refCode = params.get("ref");
       if (refCode) setReferralCodeFromUrl(refCode.toUpperCase());
+
+      // The actual bug fix: every push notification already carries a
+      // real, specific ?screen= (e.g. "/?screen=status") — it was just
+      // never being read. Without this, every notification opened the
+      // app to whatever its default screen happened to be, regardless
+      // of what the notification was actually about.
+      const screenParam = params.get("screen");
+      const validScreens = ["booking", "status", "promos", "account"];
+      if (screenParam && validScreens.includes(screenParam)) {
+        // A push notification's URL never carried an actual booking id
+        // before — it only said which screen to open, which meant the
+        // status screen had nothing to actually show. This resolves it
+        // the same way an already-signed-in customer's own session
+        // normally would (no separate access token needed, unlike a
+        // shared guest link above — their existing customerSessionToken
+        // already authorizes fetching their own booking).
+        const bookingParam = params.get("booking");
+        if (bookingParam) {
+          setBookingResult({ bookingId: bookingParam, accessToken: null, paymentTiming: null, fare: null });
+        }
+        if (params.get("open") === "chat") setAutoOpenChat(true);
+        go(screenParam);
+      }
     })();
 
     return () => {
@@ -1367,6 +1391,8 @@ function AppInner() {
               setIsSharedView(false);
               go("booking");
             }}
+            autoOpenChat={autoOpenChat}
+            onAutoOpenChatConsumed={() => setAutoOpenChat(false)}
           />
         )}
 

@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     const message = STATUS_MESSAGES[booking.status];
     let sent = false;
     if (message && booking.customer_id) {
-      await sendPushToTarget(supabase, { type: "customer", customerId: booking.customer_id }, { ...message, url: "/?screen=status" });
+      await sendPushToTarget(supabase, { type: "customer", customerId: booking.customer_id }, { ...message, url: `/?screen=status&booking=${booking.id}` });
       sent = true;
     }
     // No message for this status, or a guest booking (no customer_id

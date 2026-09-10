@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
         sendPushToTarget(
           supabase,
           { type: "customer", customerId: booking.customer_id },
-          { title: "New message from your driver", body: preview, url: "/?screen=status" }
+          { title: "New message from your driver", body: preview, url: `/?screen=status&booking=${booking.id}&open=chat` }
         );
       }
       // Guest passengers have no persistent subscription — the in-app
