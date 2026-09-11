@@ -302,10 +302,21 @@ export default function PassengerBooking({
   onSaveLocation,
   onOpenDriverProfile,
   onMakeRecurring,
+  customer = null,
 }) {
   useGoogleFont();
   const [pressed, setPressed] = useState(false);
   const phoneLinks = formatPhoneForLinks(driverPhoneNumber);
+
+  // A signed-in customer with a real, already-completed profile
+  // shouldn't be asked to re-type their own name/phone every single
+  // time they book — that information already exists on their
+  // account. Same "does this look like a real name, not an
+  // auto-repaired placeholder" check already used on the Account
+  // screen, not a new heuristic invented here.
+  const nameLooksLikePlaceholder =
+    customer?.email && customer?.name && customer.email.toLowerCase().startsWith(customer.name.toLowerCase());
+  const hasCompleteProfile = Boolean(customer?.name && customer?.phone && !nameLooksLikePlaceholder);
 
   // Persisted fields live in the parent's `draft` object (App.jsx) so
   // they survive navigating away from this screen and back — this
@@ -318,6 +329,20 @@ export default function PassengerBooking({
   const setPassengerPhone = (v) => patchDraft({ passengerPhone: v });
   const setPassengerEmail = (v) => patchDraft({ passengerEmail: v });
   const setPickup = (v) => patchDraft({ pickup: v });
+
+  // Auto-fill once from the real account — only into genuinely empty
+  // fields, so this never overwrites something the passenger already
+  // typed (e.g. booking for a friend, using a different phone for
+  // this one trip).
+  useEffect(() => {
+    if (!hasCompleteProfile) return;
+    const patch = {};
+    if (!passengerName?.trim()) patch.passengerName = customer.name;
+    if (!passengerPhone?.trim()) patch.passengerPhone = customer.phone;
+    if (!passengerEmail?.trim() && customer.email) patch.passengerEmail = customer.email;
+    if (Object.keys(patch).length > 0) patchDraft(patch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCompleteProfile, customer?.name, customer?.phone, customer?.email]);
   const setDropoff = (v) => patchDraft({ dropoff: v });
   const setPickupCoords = (v) => patchDraft({ pickupCoords: v });
   const setDropoffCoords = (v) => patchDraft({ dropoffCoords: v });
@@ -739,31 +764,56 @@ export default function PassengerBooking({
         }}
       >
         <div className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
-            <EmbossField
-              icon={User}
-              label="Your name"
-              placeholder="Jane Doe"
-              value={passengerName}
-              onChange={(e) => setPassengerName(e.target.value)}
-            />
-            <EmbossField
-              icon={Phone}
-              label="Phone"
-              type="tel"
-              placeholder="+353 87 000 0000"
-              value={passengerPhone}
-              onChange={(e) => setPassengerPhone(e.target.value)}
-            />
-          </div>
-          <EmbossField
-            icon={Mail}
-            label="Email (optional — for your receipt)"
-            type="email"
-            placeholder="you@example.com"
-            value={passengerEmail}
-            onChange={(e) => setPassengerEmail(e.target.value)}
-          />
+          {hasCompleteProfile ? (
+            <div className="flex items-center gap-2.5 rounded-xl p-3" style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)" }}>
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                style={{ background: "var(--accent-gradient)" }}
+              >
+                {customer.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-semibold" style={{ color: "var(--text-primary)" }}>Booking as {customer.name}</div>
+                <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{customer.phone}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenAccount?.()}
+                className="shrink-0 text-[11px] font-medium"
+                style={{ color: "var(--accent)" }}
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <EmbossField
+                  icon={User}
+                  label="Your name"
+                  placeholder="Jane Doe"
+                  value={passengerName}
+                  onChange={(e) => setPassengerName(e.target.value)}
+                />
+                <EmbossField
+                  icon={Phone}
+                  label="Phone"
+                  type="tel"
+                  placeholder="+353 87 000 0000"
+                  value={passengerPhone}
+                  onChange={(e) => setPassengerPhone(e.target.value)}
+                />
+              </div>
+              <EmbossField
+                icon={Mail}
+                label="Email (optional — for your receipt)"
+                type="email"
+                placeholder="you@example.com"
+                value={passengerEmail}
+                onChange={(e) => setPassengerEmail(e.target.value)}
+              />
+            </>
+          )}
           {savedLocations.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {savedLocations.map((loc) => (

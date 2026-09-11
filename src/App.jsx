@@ -1253,6 +1253,7 @@ function AppInner() {
               driverPhoneNumber={driverPhoneNumber}
               driverPhotoUrl={driverPhotoUrl}
               vehiclePhotoUrl={vehiclePhotoUrl}
+              customer={customerSession?.customer || null}
               onOpenAccount={() => {
                 authOriginRef.current = "account";
                 go(customerSession?.customer ? "account" : "auth");
