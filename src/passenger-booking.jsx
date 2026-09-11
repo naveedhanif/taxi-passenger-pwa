@@ -1093,13 +1093,13 @@ export default function PassengerBooking({
 
       {flightModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 pb-4 pt-12 sm:items-center sm:pt-4"
           style={{ background: "rgba(0,0,0,0.4)" }}
           onClick={() => setFlightModalOpen(false)}
         >
           <div
-            className="w-full max-w-[380px] rounded-t-2xl p-5 sm:rounded-2xl"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}
+            className="w-full max-w-[380px] rounded-2xl p-5"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", maxHeight: "85vh", overflowY: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-1 flex items-center gap-2 text-sm font-bold" style={{ color: "var(--text-primary)" }}>
@@ -1112,12 +1112,13 @@ export default function PassengerBooking({
               Flight number
             </label>
             <input
-              autoFocus
               value={flightDraft}
               onChange={(e) => setFlightDraft(e.target.value.toUpperCase())}
               placeholder="e.g. EI104"
+              autoCapitalize="characters"
+              autoComplete="off"
               className="mb-4 w-full rounded-xl p-3 text-sm font-semibold outline-none"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)", color: "var(--text-primary)" }}
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border-input)", color: "var(--text-primary)", fontSize: 16 }}
             />
             <div className="flex gap-2.5">
               {flightNumber && (
