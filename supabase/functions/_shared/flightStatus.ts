@@ -70,9 +70,9 @@ export async function lookupFlightStatus(flightNumber: string, dateLocal: string
   };
 
   if (!apiKey) {
-    // Not configured — quietly no-op, same principle as the push
-    // notification sender: a missing key should never break a real
-    // booking, it just means this feature silently does nothing yet.
+    // Was silently returning with zero trace anywhere — real problem
+    // for diagnosing exactly this kind of "nothing happens" report.
+    console.error("lookupFlightStatus: AERODATABOX_API_KEY is not set as a Supabase secret — flight lookup skipped.");
     return { ...notFound, error: "not configured" };
   }
 
@@ -90,6 +90,7 @@ export async function lookupFlightStatus(flightNumber: string, dateLocal: string
     if (res.status === 204) return notFound; // AeroDataBox's documented "no content" response for a genuinely unmatched flight
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      console.error(`lookupFlightStatus: AeroDataBox returned ${res.status} for "${cleanNumber}" on ${dateLocal}: ${text.slice(0, 300)}`);
       return { ...notFound, error: `AeroDataBox returned ${res.status}: ${text.slice(0, 200)}` };
     }
 
