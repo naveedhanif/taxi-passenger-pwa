@@ -152,6 +152,11 @@ function AppInner() {
   const [activePromo, setActivePromo] = useState(null);
   const [referralCodeFromUrl, setReferralCodeFromUrl] = useState("");
   const [autoOpenChat, setAutoOpenChat] = useState(false);
+  // Lifted from BookingStatus specifically so the bottom nav bar can
+  // hide itself while chat is open — both are fixed-position elements
+  // competing for the same strip of screen, which was making the
+  // chat's own input unreachable underneath the nav bar.
+  const [chatOpen, setChatOpen] = useState(false);
   const [resolvingSession, setResolvingSession] = useState(true);
   const authOriginRef = useRef("account"); // "account" | "post-booking"
 
@@ -1394,6 +1399,7 @@ function AppInner() {
             }}
             autoOpenChat={autoOpenChat}
             onAutoOpenChatConsumed={() => setAutoOpenChat(false)}
+            onChatOpenChange={setChatOpen}
           />
         )}
 
@@ -1532,12 +1538,15 @@ function AppInner() {
       {/* Mobile bottom nav — desktop keeps the existing top tab row
           unchanged; this is purely additive for small screens. Same
           4 real destinations already defined in SCREENS, not a
-          separate invented set. */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
-        style={{ background: "var(--bg-card)", borderColor: "var(--border-card)", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
-      >
-        {SCREENS.map((s) => {
+          separate invented set. Hidden entirely while chat is open —
+          both are fixed to the bottom of the screen, and the nav was
+          sitting on top of the chat's own input, making it unreachable. */}
+      {!chatOpen && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-card)", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        >
+          {SCREENS.map((s) => {
           const Icon = s.id === "booking" ? Car : s.id === "status" ? MapPin : s.id === "promos" ? Tag : User;
           const shortLabel = s.id === "booking" ? "Book" : s.id === "status" ? "Track" : s.id === "promos" ? "Promos" : "Account";
           const isActive = screen === s.id;
@@ -1553,7 +1562,8 @@ function AppInner() {
             </button>
           );
         })}
-      </nav>
+        </nav>
+      )}
 
       {/* Version badge — dev-only now, same reasoning as above. */}
       {import.meta.env.DEV && <VersionBadge />}

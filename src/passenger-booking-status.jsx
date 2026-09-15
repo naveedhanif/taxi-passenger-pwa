@@ -169,7 +169,7 @@ function EmbossCard({ children, className = "" }) {
  * @param {function} props.onBack
  * @param {function} [props.onBookAgain]
  */
-export default function BookingStatus({ bookingId, guestAccessToken, customerSessionToken, isSharedView = false, onBack, onBookAgain, autoOpenChat = false, onAutoOpenChatConsumed }) {
+export default function BookingStatus({ bookingId, guestAccessToken, customerSessionToken, isSharedView = false, onBack, onBookAgain, autoOpenChat = false, onAutoOpenChatConsumed, onChatOpenChange }) {
   useGoogleFont();
   const [data, setData] = useState(null); // { booking, driver, vehicle, position }
   const [loadError, setLoadError] = useState("");
@@ -218,6 +218,15 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   // poll — and the sound/vibrate it triggers — keeps running even
   // while the sheet is visually closed.
   const [chatOpen, setChatOpen] = useState(false);
+
+  useEffect(() => {
+    onChatOpenChange?.(chatOpen);
+    // If this whole screen unmounts while chat happens to be open
+    // (navigating away via a different route), make sure the parent's
+    // nav-hiding state doesn't stay stuck permanently hidden.
+    return () => onChatOpenChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatOpen]);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const chatOpenRef = useRef(chatOpen);
   chatOpenRef.current = chatOpen;
