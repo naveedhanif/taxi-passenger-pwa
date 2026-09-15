@@ -145,7 +145,34 @@ Deno.serve(async (req) => {
       // another booking, that's a real edge case for a human to
       // resolve directly (call the driver), not something silently
       // auto-resolved here.
-      if (lookup.delayMinutes !== null && Math.abs(lookup.delayMinutes) >= 10 && lookup.revisedArrivalUtc) {
+      // Cancellation checked first and separately from the delay-time
+      // math below — a fully cancelled flight often has no meaningful
+      // "revised arrival time" to compare against, so the delay
+      // calculation alone would silently miss it entirely. Checked
+      // case-insensitively for "cancel" anywhere in the status string,
+      // since AeroDataBox's exact casing/spelling for this isn't
+      // something I could confirm with certainty from documentation —
+      // a loose match here is safer than guessing one exact string and
+      // having it silently never match, the same failure mode as the
+      // original missing-secret bug.
+      const isCanceled = lookup.status?.toLowerCase().includes("cancel") ?? false;
+
+      if (isCanceled) {
+        if (booking.customer_id) {
+          await sendPushToTarget(
+            supabase,
+            { type: "customer", customerId: booking.customer_id },
+            { title: "Your flight was canceled", body: `Flight ${booking.flight_number} has been canceled — you may want to update or cancel this booking.`, url: `/?screen=status&booking=${booking.id}` }
+          );
+        }
+        if (booking.driver_id) {
+          await sendPushToTarget(
+            supabase,
+            { type: "driver", driverId: booking.driver_id },
+            { title: "Passenger's flight was canceled", body: `Flight ${booking.flight_number}, pickup at ${booking.pickup_address}, has been canceled.`, url: "/?screen=bookings" }
+          );
+        }
+      } else if (lookup.delayMinutes !== null && Math.abs(lookup.delayMinutes) >= 10 && lookup.revisedArrivalUtc) {
         const newPickupTime = new Date(new Date(lookup.revisedArrivalUtc).getTime());
         await supabase.from("bookings").update({ scheduled_time: newPickupTime.toISOString() }).eq("id", booking.id);
         flightsAdjusted++;
