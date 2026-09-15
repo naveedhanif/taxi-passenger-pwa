@@ -737,6 +737,14 @@ function AppInner() {
         const bookingParam = params.get("booking");
         if (bookingParam) {
           setBookingResult({ bookingId: bookingParam, accessToken: null, paymentTiming: null, fare: null });
+          // This is the passenger's own real booking, opened via a
+          // genuine notification — never a shared-link view. Explicit,
+          // not just inherited from whatever isSharedView happened to
+          // be — a stale `true` from an earlier shared-link visit was
+          // silently disabling chat (and Cancel/Rate/Tip) for every
+          // booking viewed afterward in the same session, since nothing
+          // reset it except the specific "Book Again" action.
+          setIsSharedView(false);
         }
         if (params.get("open") === "chat") setAutoOpenChat(true);
         go(screenParam);
@@ -1006,6 +1014,10 @@ function AppInner() {
     }
 
     setBookingResult(result);
+    // A brand-new booking the passenger just created — never a shared
+    // view. Same explicit-reset reasoning as the notification path
+    // above; don't rely on isSharedView happening to already be false.
+    setIsSharedView(false);
     if (!customerSession?.customer) {
       // Guest (or signed-in-but-no-customer-row-yet) booking — this is
       // the only reliable way back to it after a refresh, since there's
@@ -1447,6 +1459,10 @@ function AppInner() {
                 onDeleteRecurringRide={handleDeleteRecurringRide}
                 onSelectBooking={(booking) => {
                   setBookingResult({ bookingId: booking.id, accessToken: null, paymentTiming: null, fare: null });
+                  // A real booking from the passenger's own account
+                  // history — never a shared view. Same explicit-reset
+                  // reasoning as everywhere else a real booking loads.
+                  setIsSharedView(false);
                   go("status");
                 }}
                 onBookAgain={(booking) => {
