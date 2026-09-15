@@ -111,10 +111,11 @@ Deno.serve(async (req) => {
     const preview = body.body.trim().slice(0, 120);
     if (senderRole === "driver") {
       if (booking.customer_id) {
+        const { data: driverForUrl } = await supabase.from("drivers").select("booking_slug").eq("id", booking.driver_id).maybeSingle();
         sendPushToTarget(
           supabase,
           { type: "customer", customerId: booking.customer_id },
-          { title: "New message from your driver", body: preview, url: `/?screen=status&booking=${booking.id}&open=chat` }
+          { title: "New message from your driver", body: preview, url: `/${driverForUrl?.booking_slug || ""}?screen=status&booking=${booking.id}&open=chat` }
         );
       }
       // Guest passengers have no persistent subscription — the in-app

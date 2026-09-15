@@ -7,6 +7,14 @@ One of three apps sharing a single Supabase backend (project ref `xigqjacbhvrvpq
 ## Stack
 Vite + React 19 (JS/JSX, not TypeScript) + Tailwind. Deployed on Vercel.
 
+## Regression watchlist — verified fixed, check before touching nearby code
+These have each broken, or needed multiple attempts to actually fix. Before editing anything in this area, re-read this first — don't rediscover the same root cause from scratch.
+
+- **Every customer-facing push notification URL must include the driver's `booking_slug` prefix** — e.g. `/${slug}?screen=status&booking=${id}`, never a bare `/?screen=...`. `App.jsx` resolves `driverId` **only** from the URL path slug (`window.location.pathname`) — a notification URL missing the slug silently loses all driver context, which cascades into the chat button disappearing (it's nested inside driver-info rendering) and driver-scoped API calls failing with errors like "driver not associated." Already broke once from exactly this cause. Any new push-sending code must fetch `drivers.booking_slug` and include it.
+- **`STATUS_MESSAGES` in `notify-status-push/index.ts` needs an entry for every booking status a passenger should be told about.** `confirmed` was missing entirely for a real stretch — driver accepting a booking sent no notification at all — caught only when explicitly reported, not by inspection. If a new status is ever added to the booking lifecycle, add its message here too.
+- **The theme system** (`var(--bg-page)` etc.) — the tracking/status screen was the last converted; verify before assuming full-app dark mode coverage is complete.
+
+
 ## Theme system (new — this app only, not the driver/owner apps)
 Full light/dark toggle via CSS custom properties, defined in `src/index.css` under `:root`/`[data-theme="light"]` and `[data-theme="dark"]`. `ThemeContext.jsx` manages state (persisted to `localStorage`, defaults to light). One global toggle lives in the nav bar (both mobile hamburger bar and desktop tab row) — not per-screen; don't add another one to an individual screen. When styling anything in this app, use `var(--bg-page)`, `var(--text-primary)`, `var(--accent)` etc. instead of hardcoded hex, so it responds to the toggle. **Fully converted so far**: nav shell, Promo Codes, Account, booking form (`passenger-booking.jsx`). **Not yet converted**: `passenger-booking-status.jsx` (the live tracking screen) — still shows light-only colors regardless of the toggle. One deliberate exception: the WhatsApp share button keeps its real brand green (`#25D366`) in both themes — that's a fixed brand color, not a themeable UI color.
 

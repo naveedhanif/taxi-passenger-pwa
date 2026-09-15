@@ -36,6 +36,7 @@ const corsHeaders = {
 };
 
 const STATUS_MESSAGES: Record<string, { title: string; body: string }> = {
+  confirmed: { title: "Your booking is confirmed", body: "Your driver has accepted your ride." },
   en_route: { title: "Your driver is on the way", body: "Track your trip for a live ETA." },
   arrived: { title: "Your driver has arrived", body: "Head out when you're ready." },
   in_progress: { title: "Your trip has started", body: "Have a safe ride." },
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (userError || !userData?.user) return jsonError("Not signed in", 401);
 
-    const { data: driver } = await supabase.from("drivers").select("id, user_id, referral_reward_percent").eq("id", body.driver_id).single();
+    const { data: driver } = await supabase.from("drivers").select("id, user_id, referral_reward_percent, booking_slug").eq("id", body.driver_id).single();
     if (!driver || driver.user_id !== userData.user.id) return jsonError("Not authorized for this driver account", 403);
 
     const { data: booking } = await supabase
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
     const message = STATUS_MESSAGES[booking.status];
     let sent = false;
     if (message && booking.customer_id) {
-      await sendPushToTarget(supabase, { type: "customer", customerId: booking.customer_id }, { ...message, url: `/?screen=status&booking=${booking.id}` });
+      await sendPushToTarget(supabase, { type: "customer", customerId: booking.customer_id }, { ...message, url: `/${driver?.booking_slug || ""}?screen=status&booking=${booking.id}` });
       sent = true;
     }
     // No message for this status, or a guest booking (no customer_id

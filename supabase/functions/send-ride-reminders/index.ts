@@ -75,10 +75,11 @@ Deno.serve(async (req) => {
       const pickupTime = new Date(booking.scheduled_time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
       if (booking.customer_id) {
+        const { data: driverForUrl } = await supabase.from("drivers").select("booking_slug").eq("id", booking.driver_id).maybeSingle();
         await sendPushToTarget(
           supabase,
           { type: "customer", customerId: booking.customer_id },
-          { title: "Your ride is coming up", body: `Pickup around ${pickupTime} at ${booking.pickup_address}.`, url: `/?screen=status&booking=${booking.id}` }
+          { title: "Your ride is coming up", body: `Pickup around ${pickupTime} at ${booking.pickup_address}.`, url: `/${driverForUrl?.booking_slug || ""}?screen=status&booking=${booking.id}` }
         );
       }
       // Guests have no persistent subscription to push to — no
@@ -127,6 +128,9 @@ Deno.serve(async (req) => {
       const lookup = await lookupFlightStatus(booking.flight_number, dateLocal);
       flightsChecked++;
 
+      const { data: driverForUrl } = await supabase.from("drivers").select("booking_slug").eq("id", booking.driver_id).maybeSingle();
+      const customerUrl = `/${driverForUrl?.booking_slug || ""}?screen=status&booking=${booking.id}`;
+
       await supabase
         .from("bookings")
         .update({
@@ -162,7 +166,7 @@ Deno.serve(async (req) => {
           await sendPushToTarget(
             supabase,
             { type: "customer", customerId: booking.customer_id },
-            { title: "Your flight was canceled", body: `Flight ${booking.flight_number} has been canceled — you may want to update or cancel this booking.`, url: `/?screen=status&booking=${booking.id}` }
+            { title: "Your flight was canceled", body: `Flight ${booking.flight_number} has been canceled — you may want to update or cancel this booking.`, url: customerUrl }
           );
         }
         if (booking.driver_id) {
@@ -185,7 +189,7 @@ Deno.serve(async (req) => {
           await sendPushToTarget(
             supabase,
             { type: "customer", customerId: booking.customer_id },
-            { title: `Flight ${direction} ${minutesAbs} min`, body: `Your pickup has been adjusted to around ${newTimeLabel}.`, url: `/?screen=status&booking=${booking.id}` }
+            { title: `Flight ${direction} ${minutesAbs} min`, body: `Your pickup has been adjusted to around ${newTimeLabel}.`, url: customerUrl }
           );
         }
         if (booking.driver_id) {
