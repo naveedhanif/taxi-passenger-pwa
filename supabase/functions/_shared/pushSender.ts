@@ -56,9 +56,10 @@ export type PushTarget = { type: "driver"; driverId: string } | { type: "custome
 export async function sendPushToTarget(supabase: AnySupabaseClient, target: PushTarget, payload: PushPayload): Promise<void> {
   try {
     if (!Deno.env.get("VAPID_PUBLIC_KEY") || !Deno.env.get("VAPID_PRIVATE_KEY")) {
-      // Not configured yet — quietly no-op rather than error every
-      // caller out. Lets this be deployed ahead of the VAPID secrets
-      // being set without breaking bookings/chat/cancellations.
+      // Was silently returning with zero trace anywhere — exactly the
+      // kind of failure that's genuinely impossible to diagnose from
+      // the outside. Same lesson as flightStatus.ts's earlier fix.
+      console.error(`sendPushToTarget: VAPID keys not configured — push to ${target.type} ${target.type === "driver" ? target.driverId : target.customerId} skipped.`);
       return;
     }
     ensureConfigured();
@@ -67,7 +68,14 @@ export async function sendPushToTarget(supabase: AnySupabaseClient, target: Push
     const id = target.type === "driver" ? target.driverId : target.customerId;
 
     const { data: subs, error } = await supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq(column, id);
-    if (error || !subs || subs.length === 0) return;
+    if (error) {
+      console.error(`sendPushToTarget: query for ${column}=${id} failed:`, error);
+      return;
+    }
+    if (!subs || subs.length === 0) {
+      console.error(`sendPushToTarget: no push subscription on file for ${target.type} ${id} — nothing to send to. They likely never granted browser notification permission on any device.`);
+      return;
+    }
 
     await deliverToSubscriptions(supabase, subs, payload);
   } catch (err) {
