@@ -146,6 +146,12 @@ Deno.serve(async (req) => {
       .insert({
         driver_id: null,
         source: "pool",
+        // Generated explicitly here rather than assumed from a
+        // database default that hasn't been confirmed either way —
+        // safe regardless: if a DB default also exists, this value
+        // simply takes precedence; if not, this is what makes
+        // tracking-by-link possible at all.
+        access_token: crypto.randomUUID(),
         passenger_name: body.passenger_name.trim(),
         passenger_phone: body.passenger_phone.trim(),
         passenger_email: body.passenger_email?.trim() || null,
@@ -173,7 +179,7 @@ Deno.serve(async (req) => {
         flight_revised_arrival: flightLookup?.revisedArrivalUtc ?? null,
         flight_checked_at: flightLookup ? new Date().toISOString() : null,
       })
-      .select("id")
+      .select("id, access_token")
       .single();
 
     if (insertError || !booking) {
@@ -194,12 +200,12 @@ Deno.serve(async (req) => {
       sendPushToTarget(
         supabase,
         { type: "driver", driverId: driver.id },
-        { title: "New airport job available", body: `Pickup: ${body.pickup_address}`, url: "/?screen=pool-jobs" }
+        { title: "New airport job available", body: `Pickup: ${body.pickup_address}`, url: "/pool-jobs" }
       );
     }
 
     return new Response(
-      JSON.stringify({ bookingId: booking.id, fare: fare.total }),
+      JSON.stringify({ bookingId: booking.id, accessToken: booking.access_token, fare: fare.total }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
