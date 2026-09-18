@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
       sendPushToTarget(
         supabase,
         { type: "driver", driverId: booking.driver_id },
-        { title: "New message from passenger", body: preview, url: "/?screen=bookings" }
+        { title: "New message from passenger", body: preview, url: "/bookings" }
       );
     }
 

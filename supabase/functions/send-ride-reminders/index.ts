@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         await sendPushToTarget(
           supabase,
           { type: "driver", driverId: booking.driver_id },
-          { title: "Upcoming ride", body: `Pickup around ${pickupTime} at ${booking.pickup_address}.`, url: "/?screen=bookings" }
+          { title: "Upcoming ride", body: `Pickup around ${pickupTime} at ${booking.pickup_address}.`, url: "/bookings" }
         );
       }
 
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
           await sendPushToTarget(
             supabase,
             { type: "driver", driverId: booking.driver_id },
-            { title: "Passenger's flight was canceled", body: `Flight ${booking.flight_number}, pickup at ${booking.pickup_address}, has been canceled.`, url: "/?screen=bookings" }
+            { title: "Passenger's flight was canceled", body: `Flight ${booking.flight_number}, pickup at ${booking.pickup_address}, has been canceled.`, url: "/bookings" }
           );
         }
       } else if (lookup.delayMinutes !== null && Math.abs(lookup.delayMinutes) >= 10 && lookup.revisedArrivalUtc) {
@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
           await sendPushToTarget(
             supabase,
             { type: "driver", driverId: booking.driver_id },
-            { title: `Passenger's flight ${direction} ${minutesAbs} min`, body: `Pickup at ${booking.pickup_address} adjusted to around ${newTimeLabel}.`, url: "/?screen=bookings" }
+            { title: `Passenger's flight ${direction} ${minutesAbs} min`, body: `Pickup at ${booking.pickup_address} adjusted to around ${newTimeLabel}.`, url: "/bookings" }
           );
         }
       }

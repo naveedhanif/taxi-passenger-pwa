@@ -187,7 +187,7 @@ Deno.serve(async (req) => {
       sendPushToTarget(
         supabase,
         { type: "driver", driverId: booking.driver_id },
-        { title: "Booking cancelled", body: "A passenger cancelled their booking.", url: "/?screen=bookings" }
+        { title: "Booking cancelled", body: "A passenger cancelled their booking.", url: "/bookings" }
       );
     }
 
