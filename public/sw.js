@@ -37,7 +37,15 @@ self.addEventListener("notificationclick", (event) => {
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
-          if ("navigate" in client) client.navigate(targetUrl).catch(() => {});
+          // WindowClient.navigate() on an already-open tab is unreliable
+          // specifically on iOS Safari PWAs and can fail silently — the
+          // old code focused the window regardless, landing on whatever
+          // screen was already open. postMessage instead: the already-
+          // running app listens for this and navigates itself directly,
+          // which doesn't depend on that browser API working at all.
+          if ("postMessage" in client) {
+            client.postMessage({ type: "NOTIFICATION_NAVIGATE", url: targetUrl });
+          }
           return client.focus();
         }
       }

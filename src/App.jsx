@@ -751,6 +751,33 @@ function AppInner() {
       }
     })();
 
+    // Notification taps, when this app is already open in the
+    // background, arrive here instead — not through a page navigation
+    // at all. The service worker deliberately does NOT rely on
+    // WindowClient.navigate() (unreliable on iOS Safari PWAs, and was
+    // the real reason notifications kept opening whatever screen was
+    // already showing); instead it postMessages the target URL to this
+    // already-running app, which parses it with the same rules as the
+    // on-mount handler above and navigates itself directly.
+    function handleServiceWorkerMessage(event) {
+      if (event.data?.type !== "NOTIFICATION_NAVIGATE" || !event.data.url) return;
+      const url = new URL(event.data.url, window.location.origin);
+      const params = new URLSearchParams(url.search);
+      const screenParam = params.get("screen");
+      const validScreens = ["booking", "status", "promos", "account"];
+      if (!screenParam || !validScreens.includes(screenParam)) return;
+      const bookingParam = params.get("booking");
+      if (bookingParam) {
+        setBookingResult({ bookingId: bookingParam, accessToken: null, paymentTiming: null, fare: null });
+        setIsSharedView(false);
+      }
+      if (params.get("open") === "chat") setAutoOpenChat(true);
+      window.history.pushState(null, "", url.pathname + url.search);
+      go(screenParam);
+    }
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+
     return () => {
       cancelled = true;
     };
