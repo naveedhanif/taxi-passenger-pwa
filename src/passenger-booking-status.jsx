@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { isIosStandalone } from "./iosStandalone.js";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MapPin, Calendar, Clock, ArrowLeft, Car, CheckCircle2, Phone, MessageCircle, MessageSquare, X, Loader2, AlertCircle, Star, HeartHandshake, Share2, Check, Plane } from "lucide-react";
@@ -567,8 +568,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                 </a>
                 <a
                   href={`https://wa.me/${phoneLinks.whatsapp}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
                   className="flex h-11 w-11 items-center justify-center rounded-full"
                   style={{ background: "#25D366" }}
                   aria-label="WhatsApp driver"

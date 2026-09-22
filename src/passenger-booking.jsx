@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isIosStandalone } from "./iosStandalone.js";
 import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loader2, Car, Users, Star, Phone, Mail, ShieldCheck, AlertCircle, MessageCircle, BookmarkPlus, X, Plus, Plane } from "lucide-react";
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken, suggestionLabel } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
@@ -742,8 +743,7 @@ export default function PassengerBooking({
           </a>
           <a
             href={`https://wa.me/${phoneLinks.whatsapp}`}
-            target="_blank"
-            rel="noreferrer"
+            {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-white"
             style={{ background: "#25D366" }}
           >

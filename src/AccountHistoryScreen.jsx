@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isIosStandalone } from "./iosStandalone.js";
 import { User, MapPin, Clock, Home, Briefcase, Trash2, LogOut, ChevronRight, ArrowLeft, Pencil, Check, X, Phone, AlertCircle, RotateCw, Bell, BellOff, Loader2, Car, Tag, Copy, Share2, Gift } from "lucide-react";
 import { enablePushNotifications, getPushPermissionState, isPushSupported, isIosNonStandalone } from "./pushNotifications.js";
 import { getMyReferralCode } from "./referralApi.js";
@@ -394,8 +395,7 @@ export default function AccountHistoryScreen({
           <div className="grid grid-cols-2 gap-2">
             <a
               href={`https://wa.me/?text=${encodeURIComponent(referralShareText)}`}
-              target="_blank"
-              rel="noreferrer"
+              {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
               className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold"
               style={{ background: "var(--bg-card-alt)", color: "var(--text-primary)" }}
             >

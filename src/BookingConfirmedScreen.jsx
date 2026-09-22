@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isIosStandalone } from "./iosStandalone.js";
 import { CheckCircle2, MapPin, Calendar, Clock, ArrowRight, Phone, MessageCircle } from "lucide-react";
 import { formatPhoneForLinks } from "./phoneLinks.js";
 
@@ -100,8 +101,7 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
             </a>
             <a
               href={`https://wa.me/${phoneLinks.whatsapp}`}
-              target="_blank"
-              rel="noreferrer"
+              {...(isIosStandalone() ? {} : { target: "_blank", rel: "noreferrer" })}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold text-white"
               style={{ background: "#25D366" }}
             >
