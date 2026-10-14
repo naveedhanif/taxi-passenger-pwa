@@ -24,6 +24,32 @@ import webpush from "npm:web-push@3";
 // deno-lint-ignore no-explicit-any
 type AnySupabaseClient = any; // avoids pulling in the full supabase-js type surface just for this
 
+// Most call sites deliberately don't `await` a push (a failed push must
+// never fail the booking/message). But on Supabase edge functions the
+// worker can be shut down the moment the HTTP response is sent, which
+// silently kills any un-awaited push still in flight — so pushes were
+// being dropped intermittently with no log at all. EdgeRuntime.waitUntil
+// keeps the worker alive until the push finishes, without making the
+// caller wait for it.
+function keepAlive(work: Promise<void>): Promise<void> {
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") {
+    runtime.waitUntil(work);
+  } else {
+    console.error("pushSender: EdgeRuntime.waitUntil unavailable — un-awaited pushes may be dropped.");
+  }
+  return work;
+}
+
+export function sendPushToTarget(supabase: AnySupabaseClient, target: PushTarget, payload: PushPayload): Promise<void> {
+  return keepAlive(sendPushToTargetInner(supabase, target, payload));
+}
+
+export function sendPushToAllAdmins(supabase: AnySupabaseClient, payload: PushPayload): Promise<void> {
+  return keepAlive(sendPushToAllAdminsInner(supabase, payload));
+}
+
 let configured = false;
 function ensureConfigured() {
   if (configured) return;
@@ -53,7 +79,7 @@ export type PushTarget = { type: "driver"; driverId: string } | { type: "custome
  * triggered it. Same "non-fatal side effect" reasoning as the promo
  * uses_count increment in create-booking.
  */
-export async function sendPushToTarget(supabase: AnySupabaseClient, target: PushTarget, payload: PushPayload): Promise<void> {
+async function sendPushToTargetInner(supabase: AnySupabaseClient, target: PushTarget, payload: PushPayload): Promise<void> {
   try {
     if (!Deno.env.get("VAPID_PUBLIC_KEY") || !Deno.env.get("VAPID_PRIVATE_KEY")) {
       // Was silently returning with zero trace anywhere — exactly the
@@ -89,7 +115,7 @@ export async function sendPushToTarget(supabase: AnySupabaseClient, target: Push
  * about it. Used today for exactly one event: a driver submitting an
  * SPSV licence for review.
  */
-export async function sendPushToAllAdmins(supabase: AnySupabaseClient, payload: PushPayload): Promise<void> {
+async function sendPushToAllAdminsInner(supabase: AnySupabaseClient, payload: PushPayload): Promise<void> {
   try {
     if (!Deno.env.get("VAPID_PUBLIC_KEY") || !Deno.env.get("VAPID_PRIVATE_KEY")) return;
     ensureConfigured();
