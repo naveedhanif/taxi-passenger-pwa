@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Clock, Route as RouteIcon, ArrowRight, Loader2, AlertCircle, CreditCard, Banknote, Tag, Check, X } from "lucide-react";
+import { MapPin, Clock, ArrowLeft, Info, Route as RouteIcon, ArrowRight, Loader2, AlertCircle, CreditCard, Banknote, Tag, Check, X } from "lucide-react";
 import { getRouteMultiStop } from "./mapboxClient";
 import { getTariffPeriod, calculateFare, selectFareRule } from "./fareCalculator";
 import { lookupPromoCode } from "./promoApi.js";
@@ -16,9 +16,9 @@ function useGoogleFont() {
 }
 
 const TARIFF_LABEL = {
-  standard: { label: "Standard rate", bg: "#EAF3DE", text: "#27500A" },
-  premium: { label: "Premium rate", bg: "#FAEEDA", text: "#633806" },
-  special: { label: "Special rate", bg: "#FCEBEB", text: "#791F1F" },
+  standard: { label: "Standard rate", bg: "var(--success-bg)", text: "var(--success-text)" },
+  premium: { label: "Premium rate", bg: "var(--warning-bg)", text: "var(--warning-text)" },
+  special: { label: "Special rate", bg: "var(--error-bg)", text: "var(--error-text)" },
 };
 
 /**
@@ -172,23 +172,24 @@ export default function FareEstimateScreen({
 
   return (
     <div
-      className="mx-auto w-full max-w-[400px] p-5"
-      style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}
+      className="mx-auto w-full max-w-[430px] p-5 pb-28"
+      style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}
     >
       <div className="mb-5 flex items-center justify-between">
         <button
           onClick={onBack}
           className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
+          style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-btn)" }}
+          aria-label="Back"
         >
-          <ArrowRight size={15} color="#5F5E5A" style={{ transform: "rotate(180deg)" }} />
+          <ArrowLeft size={17} color="var(--text-primary)" />
         </button>
-        <div className="text-sm font-semibold text-[#2C2C2A]">Fare estimate</div>
-        <div className="w-9" />
+        <div className="text-base font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>Trip details</div>
+        <div className="w-11" />
       </div>
 
       {status === "loading" && (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-[#5F5E5A]">
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-[var(--text-secondary)]">
           <Loader2 size={22} className="animate-spin" color="var(--accent)" />
           Calculating your fare…
         </div>
@@ -196,8 +197,8 @@ export default function FareEstimateScreen({
 
       {status === "error" && (
         <div
-          className="flex flex-col items-center gap-3 rounded-xl p-6 text-center text-sm"
-          style={{ background: "#FCEBEB", color: "#791F1F" }}
+          className="flex flex-col items-center gap-3 rounded-2xl p-6 text-center text-sm"
+          style={{ background: "var(--error-bg)", color: "var(--error-text)" }}
         >
           <AlertCircle size={22} />
           {errorMessage}
@@ -207,8 +208,8 @@ export default function FareEstimateScreen({
       {status === "ready" && (
         <>
           <div
-            className="mb-4 overflow-hidden rounded-xl"
-            style={{ border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
+            className="mb-4 overflow-hidden rounded-2xl"
+            style={{ border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
             <LiveMapView
               token={mapboxToken}
@@ -218,58 +219,73 @@ export default function FareEstimateScreen({
             />
           </div>
 
-          {stops.length > 0 && (
-            <div
-              className="mb-4 rounded-xl p-3.5 text-xs"
-              style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}
-            >
-              <div className="mb-1.5 font-semibold text-[#5F5E5A]">Stops on this trip</div>
+          {/* Route card: pickup → stops → destination, like the reference "Trip details" */}
+          <div className="mb-4 rounded-2xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}>
+            <div className="relative space-y-4 pl-7">
+              <span className="absolute left-[5px] top-3 bottom-3 border-l-2 border-dashed" style={{ borderColor: "var(--border-input)" }} />
+              <div className="relative">
+                <span className="absolute -left-7 top-1 h-3 w-3 rounded-full" style={{ background: "#2E9E5B", boxShadow: "0 0 0 4px rgba(46,158,91,0.18)" }} />
+                <div className="text-[11px] text-[var(--text-muted)]">Pickup location</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{pickup.address}</div>
+              </div>
               {stops.map((s, i) => (
-                <div key={i} className="flex items-center gap-1.5 py-0.5 text-[#2C2C2A]">
-                  <MapPin size={11} color="#8C8977" /> {s.address}
+                <div key={i} className="relative">
+                  <span className="absolute -left-7 top-1 h-3 w-3 rounded-full" style={{ background: "var(--bg-card)", border: "3px solid var(--text-primary)" }} />
+                  <div className="text-[11px] text-[var(--text-muted)]">Stop {i + 1}</div>
+                  <div className="text-sm font-semibold text-[var(--text-primary)]">{s.address}</div>
                 </div>
               ))}
+              <div className="relative">
+                <span className="absolute -left-7 top-1 h-3 w-3 rounded-full" style={{ background: "var(--brand)", boxShadow: "0 0 0 4px rgba(255,196,0,0.25)" }} />
+                <div className="text-[11px] text-[var(--text-muted)]">Destination</div>
+                <div className="text-sm font-semibold text-[var(--text-primary)]">{dropoff.address}</div>
+              </div>
             </div>
-          )}
+          </div>
 
-          <div
-            className="mb-4 flex items-center justify-between rounded-xl px-4 py-3"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
-          >
-            <div className="flex items-center gap-1.5 text-xs text-[#5F5E5A]">
-              <RouteIcon size={13} /> {route.distanceKm} km
+          {/* Estimated fare hero */}
+          <div className="mb-4 rounded-2xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}>
+            <div className="text-xs font-medium text-[var(--text-secondary)]">Estimated fare</div>
+            <div className="mt-1 flex items-end gap-2">
+              <span className="text-4xl font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>€{displayTotal.toFixed(2)}</span>
+              <span className="pb-1.5 text-xs text-[var(--text-muted)]">(approx.)</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-[#5F5E5A]">
-              <Clock size={13} /> ~{Math.round(route.durationMinutes)} min
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium text-[var(--text-secondary)]" style={{ background: "var(--bg-card-alt)" }}>
+                <RouteIcon size={12} /> {route.distanceKm} km
+              </span>
+              <span className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium text-[var(--text-secondary)]" style={{ background: "var(--bg-card-alt)" }}>
+                <Clock size={12} /> ~{Math.round(route.durationMinutes)} min
+              </span>
+              <span
+                className="rounded-full px-3 py-1 text-[11px] font-medium"
+                style={{ background: TARIFF_LABEL[tariffPeriod].bg, color: TARIFF_LABEL[tariffPeriod].text }}
+              >
+                {TARIFF_LABEL[tariffPeriod].label}
+              </span>
             </div>
-            <span
-              className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-              style={{ background: TARIFF_LABEL[tariffPeriod].bg, color: TARIFF_LABEL[tariffPeriod].text }}
-            >
-              {TARIFF_LABEL[tariffPeriod].label}
-            </span>
           </div>
 
           {/* Manual promo code entry — an auto-detected code (if any)
               already applies without this; this is only for a code the
               passenger has to hand explicitly and wants to use instead. */}
           <div
-            className="mb-4 rounded-xl p-4"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
+            className="mb-4 rounded-2xl p-4"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
             {manualPromo ? (
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#27500A" }}>
+                <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--success-text)" }}>
                   <Tag size={13} />
                   {manualPromo.code} applied — {formatDiscount(manualPromo)}
                 </div>
-                <button onClick={handleClearManualCode} className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: "#F0EEE7" }}>
-                  <X size={11} color="#5F5E5A" />
+                <button onClick={handleClearManualCode} className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: "var(--bg-card-alt)" }}>
+                  <X size={11} color="var(--text-secondary)" />
                 </button>
               </div>
             ) : (
               <>
-                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[#5F5E5A]">
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
                   <Tag size={13} /> Have a promo code?
                 </div>
                 <div className="flex gap-2">
@@ -285,8 +301,8 @@ export default function FareEstimateScreen({
                       }
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleApplyCode()}
-                    className="min-w-0 flex-1 rounded-lg px-3 py-2 text-xs font-semibold uppercase text-[#2C2C2A]"
-                    style={{ background: "#FFFFFF", border: "1px solid #ECE9E0" }}
+                    className="min-w-0 flex-1 rounded-lg px-3 py-2 text-xs font-semibold uppercase text-[var(--text-primary)]"
+                    style={{ background: "var(--bg-input)", border: "1px solid var(--border-card)" }}
                   />
                   <button
                     onClick={handleApplyCode}
@@ -299,12 +315,12 @@ export default function FareEstimateScreen({
                   </button>
                 </div>
                 {manualStatus === "error" && (
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "#791F1F" }}>
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "var(--error-text)" }}>
                     <AlertCircle size={11} /> {manualError}
                   </div>
                 )}
                 {promo && !manualCode && (
-                  <div className="mt-2 text-[11px] text-[#8C8977]">
+                  <div className="mt-2 text-[11px] text-[var(--text-muted)]">
                     You already have {promo.code} ({formatDiscount(promo)}) applied automatically — entering a code here will use that one instead.
                   </div>
                 )}
@@ -312,82 +328,82 @@ export default function FareEstimateScreen({
             )}
           </div>
 
-          <div
-            className="mb-4 rounded-xl p-4"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
+          <details
+            className="mb-4 rounded-2xl p-4"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
-            <div className="mb-3 text-xs font-medium text-[#5F5E5A]">Fare breakdown</div>
-            <div className="space-y-2 text-sm text-[#2C2C2A]">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--text-primary)]">Fare breakdown</summary>
+            <div className="mt-3 space-y-2 text-sm text-[var(--text-primary)]">
               <div className="flex justify-between"><span>Base fare</span><span>€{fare.baseFare.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Distance ({route.distanceKm} km)</span><span>€{fare.distanceCost.toFixed(2)}</span></div>
               <div className="flex justify-between"><span>Time ({Math.round(route.durationMinutes)} min)</span><span>€{fare.timeCost.toFixed(2)}</span></div>
               {!effectivePromo && fare.discountPercent > 0 && (
-                <div className="flex justify-between" style={{ color: "#27500A" }}>
+                <div className="flex justify-between" style={{ color: "var(--success-text)" }}>
                   <span>Discount ({fare.discountPercent}%)</span>
                   <span>−€{fare.discountAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between"><span>Pre-booking fee</span><span>€{fare.preBookingFee.toFixed(2)}</span></div>
               {effectivePromo && promoDiscountAmount > 0 && (
-                <div className="flex justify-between" style={{ color: "#27500A" }}>
+                <div className="flex justify-between" style={{ color: "var(--success-text)" }}>
                   <span>Promo {effectivePromo.code} ({formatDiscount(effectivePromo)} — replaces your standard discount)</span>
                   <span>−€{promoDiscountAmount.toFixed(2)}</span>
                 </div>
               )}
             </div>
             {fare.minimumFareApplied && (
-              <div className="mt-2 text-[11px] text-[#8C8977]">Minimum fare applied for this trip</div>
+              <div className="mt-2 text-[11px] text-[var(--text-muted)]">Minimum fare applied for this trip</div>
             )}
-            <div className="mt-3 flex items-center justify-between border-t border-[#ECE9E0] pt-3">
-              <span className="text-sm font-medium text-[#2C2C2A]">Total</span>
-              <span className="text-lg font-semibold text-[#2C2C2A]">€{displayTotal.toFixed(2)}</span>
+            <div className="mt-3 flex items-center justify-between border-t border-[var(--border-card)] pt-3">
+              <span className="text-sm font-medium text-[var(--text-primary)]">Total</span>
+              <span className="text-lg font-semibold text-[var(--text-primary)]">€{displayTotal.toFixed(2)}</span>
             </div>
-          </div>
+          </details>
 
           {/* Pay now vs pay later */}
           <div
-            className="mb-4 rounded-xl p-4"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
+            className="mb-4 rounded-2xl p-4"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
-            <div className="mb-3 text-xs font-medium text-[#5F5E5A]">How do you want to pay?</div>
+            <div className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Payment method</div>
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setPaymentTiming("now")}
                 className="flex flex-col items-start gap-1.5 rounded-lg p-3 text-left transition-all"
                 style={{
-                  background: paymentTiming === "now" ? "#EAF1FB" : "#FFFFFF",
-                  border: paymentTiming === "now" ? "1.5px solid var(--accent)" : "1px solid #ECE9E0",
+                  background: paymentTiming === "now" ? "var(--info-bg)" : "var(--bg-input)",
+                  border: paymentTiming === "now" ? "1.5px solid var(--accent)" : "1px solid var(--border-card)",
                 }}
               >
-                <CreditCard size={16} color={paymentTiming === "now" ? "var(--accent)" : "#5F5E5A"} />
-                <span className="text-xs font-semibold text-[#2C2C2A]">Pay now</span>
-                <span className="text-[11px] text-[#5F5E5A]">Full fare charged by card, right now</span>
+                <CreditCard size={16} color={paymentTiming === "now" ? "var(--accent)" : "var(--text-secondary)"} />
+                <span className="text-xs font-semibold text-[var(--text-primary)]">Pay now</span>
+                <span className="text-[11px] text-[var(--text-secondary)]">Full fare charged by card, right now</span>
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentTiming("later")}
                 className="flex flex-col items-start gap-1.5 rounded-lg p-3 text-left transition-all"
                 style={{
-                  background: paymentTiming === "later" ? "#EAF1FB" : "#FFFFFF",
-                  border: paymentTiming === "later" ? "1.5px solid var(--accent)" : "1px solid #ECE9E0",
+                  background: paymentTiming === "later" ? "var(--info-bg)" : "var(--bg-input)",
+                  border: paymentTiming === "later" ? "1.5px solid var(--accent)" : "1px solid var(--border-card)",
                 }}
               >
-                <Banknote size={16} color={paymentTiming === "later" ? "var(--accent)" : "#5F5E5A"} />
-                <span className="text-xs font-semibold text-[#2C2C2A]">Pay in the taxi</span>
-                <span className="text-[11px] text-[#5F5E5A]">{depositEnabled ? "Cash or card after the ride" : "No deposit — pay after the ride"}</span>
+                <Banknote size={16} color={paymentTiming === "later" ? "var(--accent)" : "var(--text-secondary)"} />
+                <span className="text-xs font-semibold text-[var(--text-primary)]">Pay in the taxi</span>
+                <span className="text-[11px] text-[var(--text-secondary)]">{depositEnabled ? "Cash or card after the ride" : "No deposit — pay after the ride"}</span>
               </button>
             </div>
 
             {paymentTiming === "later" && depositEnabled && (
-              <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "#FAEEDA", color: "#633806" }}>
+              <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "var(--warning-bg)", color: "var(--warning-text)" }}>
                 A €{payLaterDepositAmount.toFixed(2)} deposit is charged now to secure your booking. It's
                 subtracted from the fare — you'll owe €{Math.max(displayTotal - payLaterDepositAmount, 0).toFixed(2)} more,
                 payable to the driver by cash or card once the trip is complete.
               </div>
             )}
             {paymentTiming === "later" && !depositEnabled && (
-              <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "#EAF3DE", color: "#27500A" }}>
+              <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "var(--success-bg)", color: "var(--success-text)" }}>
                 No deposit required — nothing is charged now. You'll pay the full fare of €{displayTotal.toFixed(2)} directly to
                 your driver by cash or card once the trip is complete.
               </div>
@@ -405,7 +421,7 @@ export default function FareEstimateScreen({
                 promoCodeId: effectivePromo?.id ?? null,
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold text-white"
             style={{
               background: "var(--accent-gradient)",
               boxShadow: "var(--shadow-accent-btn)",
@@ -419,7 +435,8 @@ export default function FareEstimateScreen({
             <ArrowRight size={15} />
           </button>
 
-          <div className="mt-3 text-center text-[11px] text-[#8C8977]">
+          <div className="mt-4 flex items-start gap-2.5 rounded-2xl p-3.5 text-[11px] leading-relaxed" style={{ background: "var(--info-bg)", color: "var(--info-text)" }}>
+            <Info size={15} className="mt-0.5 shrink-0" />
             Fares reflect current traffic conditions and may differ slightly from the final metered amount.
           </div>
         </>

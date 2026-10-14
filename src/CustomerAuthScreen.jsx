@@ -15,14 +15,14 @@ function useGoogleFont() {
 function Field({ icon: Icon, ...props }) {
   return (
     <div
-      className="flex items-center gap-2.5 rounded-xl px-4 py-3"
-      style={{ background: "#F0EEE7", boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)" }}
+      className="flex items-center gap-2.5 rounded-2xl px-4 py-3"
+      style={{ background: "var(--bg-card-alt)", boxShadow: "inset 2px 2px 5px rgba(44,44,42,0.14), inset -2px -2px 5px rgba(255,255,255,0.8)" }}
     >
-      <Icon size={16} color="#8C8977" />
+      <Icon size={16} color="var(--text-muted)" />
       <input
         {...props}
-        className="w-full bg-transparent text-sm outline-none placeholder:text-[#8C8977]"
-        style={{ color: "#2C2C2A" }}
+        className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
+        style={{ color: "var(--text-primary)" }}
       />
     </div>
   );
@@ -78,26 +78,26 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
   }
 
   return (
-    <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 640 }}>
+    <div className="mx-auto w-full max-w-[430px] p-5" style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}>
       <div className="mb-5 flex items-center justify-between">
         <button
           onClick={onBack}
           className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
+          style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
         >
-          <ArrowLeft size={15} color="#5F5E5A" />
+          <ArrowLeft size={15} color="var(--text-secondary)" />
         </button>
-        <div className="text-sm font-semibold text-[#2C2C2A]">{driverName}</div>
+        <div className="text-sm font-semibold text-[var(--text-primary)]">{driverName}</div>
         <div className="w-11" />
       </div>
 
       {confirmationSent ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <Mail size={28} color="var(--accent)" />
-          <div className="text-base font-semibold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+          <div className="text-base font-semibold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
             Check your email
           </div>
-          <div className="max-w-xs text-sm text-[#5F5E5A]">
+          <div className="max-w-xs text-sm text-[var(--text-secondary)]">
             We've sent a confirmation link to {email}. Tap it, then come back and sign in.
           </div>
           <button
@@ -112,10 +112,10 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         </div>
       ) : (
         <>
-      <div className="mb-1 text-xl" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700, color: "#2C2C2A" }}>
+      <div className="mb-1 text-xl" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700, color: "var(--text-primary)" }}>
         {mode === "signup" ? "Create your account" : "Welcome back"}
       </div>
-      <div className="mb-6 text-sm text-[#5F5E5A]">
+      <div className="mb-6 text-sm text-[var(--text-secondary)]">
         {mode === "signup" ? "Save your trip history and book faster next time." : "Sign in to see your bookings."}
       </div>
 
@@ -139,7 +139,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         )}
 
         {errorMessage && (
-          <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+          <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
             <AlertCircle size={14} /> {errorMessage}
           </div>
         )}
@@ -147,7 +147,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         <button
           type="submit"
           disabled={submitting}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
           style={{ background: "var(--accent-gradient)", boxShadow: "var(--shadow-accent-btn)" }}
         >
           {submitting ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}

@@ -63,7 +63,7 @@ function TipForm({ bookingId, onSuccess, onError }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="mb-3 rounded-lg p-3" style={{ background: "#F1EFE8" }}>
+      <div className="mb-3 rounded-lg p-3" style={{ background: "var(--bg-card-alt)" }}>
         <PaymentElement onReady={() => setElementReady(true)} />
       </div>
       <button
@@ -92,7 +92,7 @@ export default function TipPaymentForm({ stripePublishableKey, clientSecret, boo
 
   if (!stripePromise || !clientSecret) {
     return (
-      <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+      <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
         <AlertCircle size={13} /> Couldn't load the payment form.
       </div>
     );
@@ -101,7 +101,7 @@ export default function TipPaymentForm({ stripePublishableKey, clientSecret, boo
   return (
     <div>
       {errorMessage && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+        <div className="mb-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
           <AlertCircle size={13} /> {errorMessage}
         </div>
       )}

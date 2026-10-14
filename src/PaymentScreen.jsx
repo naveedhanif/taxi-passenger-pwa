@@ -165,15 +165,15 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
   return (
     <form onSubmit={handleSubmit}>
       {paymentTiming === "later" && (
-        <div className="mb-4 rounded-lg p-3 text-xs leading-relaxed" style={{ background: "#FAEEDA", color: "#633806" }}>
+        <div className="mb-4 rounded-lg p-3 text-xs leading-relaxed" style={{ background: "var(--warning-bg)", color: "var(--warning-text)" }}>
           This is your <strong>€{amount.toFixed(2)} booking deposit</strong>, not the full fare. You'll pay the
           remaining €{(balanceDue ?? 0).toFixed(2)} directly to the driver (cash or card) once the trip is complete.
         </div>
       )}
 
       <div
-        className="rounded-xl p-4"
-        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
+        className="rounded-2xl p-4"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
       >
         <PaymentElement
           onReady={() => setElementReady(true)}
@@ -202,21 +202,23 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
           is confirmed fixed. Surfaces exactly what state Stripe's SDK
           is in without needing DevTools, since the failure mode being
           debugged produces zero console errors by default. */}
-      <div className="mt-3 rounded-lg p-3 text-[10px] font-mono leading-relaxed" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+      {import.meta.env.DEV && (
+      <div className="mt-3 rounded-lg p-3 text-[10px] font-mono leading-relaxed" style={{ background: "var(--bg-card-alt)", color: "var(--text-secondary)" }}>
         <div>stripe loaded: {stripe ? "yes" : "no"}</div>
         <div>elements loaded: {elements ? "yes" : "no"}</div>
         <div>element ready: {elementReady ? "yes" : "no"}</div>
         <div>load error: {loadError || "none"}</div>
       </div>
+      )}
 
       {loadError && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+        <div className="mt-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
           <AlertCircle size={14} /> Payment form couldn't load: {loadError}
         </div>
       )}
 
       {errorMessage && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+        <div className="mt-3 flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
           <AlertCircle size={14} /> {errorMessage}
         </div>
       )}
@@ -224,7 +226,7 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
       <button
         type="submit"
         disabled={!stripe || !elementReady || submitting}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
         style={{
           background: "var(--accent-gradient)",
           boxShadow: "var(--shadow-accent-btn)",
@@ -240,7 +242,7 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
         {!submitting && elementReady && <ArrowRight size={15} />}
       </button>
 
-      <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-[#8C8977]">
+      <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-[var(--text-muted)]">
         <ShieldCheck size={12} />
         Payment goes directly to your driver via Stripe — securely processed, never stored by this app.
       </div>
@@ -264,8 +266,8 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, book
   if (!stripePublishableKey) {
     return (
       <div
-        className="mx-auto w-full max-w-[400px] p-5 text-center text-sm text-[#8C8977]"
-        style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 300 }}
+        className="mx-auto w-full max-w-[430px] p-5 text-center text-sm text-[var(--text-muted)]"
+        style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 300 }}
       >
         Payment unavailable — VITE_STRIPE_PUBLISHABLE_KEY isn't set for this deployment. Add it in your
         hosting provider's environment variables (not just your local .env file) and redeploy.
@@ -276,8 +278,8 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, book
   if (!clientSecret) {
     return (
       <div
-        className="mx-auto w-full max-w-[400px] p-5 text-center text-sm text-[#8C8977]"
-        style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 300 }}
+        className="mx-auto w-full max-w-[430px] p-5 text-center text-sm text-[var(--text-muted)]"
+        style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 300 }}
       >
         Payment unavailable — no booking was created yet. Go back and confirm your fare estimate first.
       </div>
@@ -298,20 +300,22 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, book
   };
 
   return (
-    <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "#F7F7F5", fontFamily: "Inter", minHeight: 500 }}>
-      <div className="mb-5 text-sm font-semibold text-[#2C2C2A]">Payment</div>
+    <div className="mx-auto w-full max-w-[430px] p-5" style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 500 }}>
+      <div className="mb-5 text-sm font-semibold text-[var(--text-primary)]">Payment</div>
 
       {/* TEMPORARY DIAGNOSTIC — remove once the blank-payment-form bug
           is confirmed fixed. Shows just enough of each value (never the
           full clientSecret or key) to confirm publishable-key mode and
           that a real clientSecret was actually received, without
           exposing anything sensitive on screen. */}
-      <div className="mb-3 rounded-lg p-3 text-[10px] font-mono leading-relaxed" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>
+      {import.meta.env.DEV && (
+      <div className="mb-3 rounded-lg p-3 text-[10px] font-mono leading-relaxed" style={{ background: "var(--bg-card-alt)", color: "var(--text-secondary)" }}>
         <div>publishable key prefix: {stripePublishableKey.slice(0, 12)}...</div>
         <div>publishable key mode: {stripePublishableKey.startsWith("pk_live_") ? "LIVE" : stripePublishableKey.startsWith("pk_test_") ? "TEST" : "UNKNOWN"}</div>
         <div>clientSecret present: {clientSecret ? "yes" : "no"}</div>
         <div>clientSecret prefix: {clientSecret ? clientSecret.slice(0, 20) + "..." : "n/a"}</div>
       </div>
+      )}
 
       <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
         <PaymentForm amount={amount} paymentTiming={paymentTiming} balanceDue={balanceDue} bookingId={bookingId} onSuccess={onSuccess} />

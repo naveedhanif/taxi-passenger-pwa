@@ -47,9 +47,9 @@ function guestBookingStorageKey(driverId) {
 }
 
 const STATUS_ALERT_STYLES = {
-  success: { background: "#EAF3DE", color: "#27500A", border: "1px solid #CFE3B8" },
+  success: { background: "var(--success-bg)", color: "var(--success-text)", border: "1px solid #CFE3B8" },
   info: { background: "var(--info-bg)", color: "var(--info-text)", border: "1px solid var(--border-card)" },
-  error: { background: "#FCEBEB", color: "#791F1F", border: "1px solid #F3C6C6" },
+  error: { background: "var(--error-bg)", color: "var(--error-text)", border: "1px solid #F3C6C6" },
 };
 
 function AppInner() {
@@ -1116,7 +1116,7 @@ function AppInner() {
   // driver this visit is for. ----
   if (driverLookupStatus === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F7F7F5] text-sm text-[#5F5E5A]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-sm text-[var(--text-secondary)]">
         <Loader2 size={18} className="mr-2 animate-spin" /> Loading…
       </div>
     );
@@ -1124,11 +1124,11 @@ function AppInner() {
 
   if (driverLookupStatus === "no_slug") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[#F7F7F5] p-6 text-center">
-        <div className="text-base font-semibold text-[#2C2C2A]">No driver specified</div>
-        <div className="max-w-sm text-sm text-[#5F5E5A]">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[var(--bg-page)] p-6 text-center">
+        <div className="text-base font-semibold text-[var(--text-primary)]">No driver specified</div>
+        <div className="max-w-sm text-sm text-[var(--text-secondary)]">
           This link needs a driver's booking page — e.g.{" "}
-          <code className="rounded bg-[#F0EEE7] px-1.5 py-0.5 text-xs">yoursite.com/johns-taxi</code>.
+          <code className="rounded bg-[var(--bg-card-alt)] px-1.5 py-0.5 text-xs">yoursite.com/johns-taxi</code>.
           Ask your driver for their QR code or booking link.
         </div>
       </div>
@@ -1137,10 +1137,10 @@ function AppInner() {
 
   if (driverLookupStatus === "not_found") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[#F7F7F5] p-6 text-center">
-        <AlertCircle size={22} className="text-[#791F1F]" />
-        <div className="text-base font-semibold text-[#2C2C2A]">Driver not found</div>
-        <div className="max-w-sm text-sm text-[#5F5E5A]">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[var(--bg-page)] p-6 text-center">
+        <AlertCircle size={22} className="text-[var(--error-text)]" />
+        <div className="text-base font-semibold text-[var(--text-primary)]">Driver not found</div>
+        <div className="max-w-sm text-sm text-[var(--text-secondary)]">
           This booking link doesn't match an active driver. Double-check the link or QR code with your driver.
         </div>
       </div>
@@ -1149,7 +1149,9 @@ function AppInner() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-page)" }}>
-      {/* Mobile: hamburger bar */}
+      {/* Mobile: hamburger bar — hidden on the two map-first screens, which draw their own floating header over the map */}
+      {screen !== "booking" && screen !== "status" && (
+        <>
       <div
         className="sticky top-0 z-40 flex items-center justify-between border-b px-4 py-3 backdrop-blur-md sm:hidden"
         style={{ borderColor: "var(--border-card)", background: "color-mix(in srgb, var(--bg-page) 95%, transparent)" }}
@@ -1185,6 +1187,9 @@ function AppInner() {
         </div>
       )}
 
+        </>
+      )}
+
       {/* Desktop / tablet: row of tabs */}
       <div
         className="sticky top-0 z-40 hidden flex-wrap items-center justify-center gap-2.5 border-b p-4 backdrop-blur-md sm:flex"
@@ -1206,12 +1211,12 @@ function AppInner() {
         <ThemeToggle />
       </div>
 
-      <div className="py-6 pb-24 sm:pb-6">
+      <div className={`pb-24 sm:py-6 sm:pb-6 ${screen === "booking" || screen === "status" ? "py-0" : "py-6"}`}>
         <audio ref={statusAudioRef} src="/status-update-chime.wav" preload="auto" />
         <audio ref={promoAudioRef} src="/promo-received.wav" preload="auto" />
         {statusAlert && (
           <div
-            className="mx-auto mb-4 flex w-full max-w-[400px] items-start gap-3 rounded-xl p-4 text-sm"
+            className="mx-auto mb-4 flex w-full max-w-[430px] items-start gap-3 rounded-2xl p-4 text-sm"
             style={STATUS_ALERT_STYLES[statusAlert.tone]}
           >
             {statusAlert.tone === "success" ? (
@@ -1241,13 +1246,13 @@ function AppInner() {
         )}
 
         {driverDataError && (
-          <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+          <div className="mx-auto mb-4 flex w-full max-w-[430px] items-center gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
             <AlertCircle size={16} /> {driverDataError}
           </div>
         )}
 
         {!isDriverOnline && !driverDataError && screen === "booking" && (
-          <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#F1EFE8", color: "#2C2C2A" }}>
+          <div className="mx-auto mb-4 flex w-full max-w-[430px] items-center gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--bg-card-alt)", color: "var(--text-primary)" }}>
             <AlertCircle size={16} />
             {driverBreakUntil
               ? `${businessName || "This driver"} is on a short break — back around ${new Date(driverBreakUntil).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}.`
@@ -1256,7 +1261,7 @@ function AppInner() {
         )}
 
         {isDriverOnline && !isDriverAvailable && !driverDataError && screen === "booking" && (
-          <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FAEEDA", color: "#633806" }}>
+          <div className="mx-auto mb-4 flex w-full max-w-[430px] items-center gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--warning-bg)", color: "var(--warning-text)" }}>
             <AlertCircle size={16} /> This driver already has a booking in progress right now — check back
             shortly, or pick a later date/time below.
           </div>
@@ -1265,7 +1270,7 @@ function AppInner() {
         {screen === "booking" && (
           <>
             {!resolvingSession && activeGuestBooking && (
-              <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center justify-between gap-2 rounded-xl p-4 text-sm" style={{ background: "var(--info-bg)", color: "var(--info-text)" }}>
+              <div className="mx-auto mb-4 flex w-full max-w-[430px] items-center justify-between gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--info-bg)", color: "var(--info-text)" }}>
                 <span>You have an active booking with this driver.</span>
                 <button onClick={() => go("status")} className="font-semibold underline shrink-0">
                   View status
@@ -1273,7 +1278,7 @@ function AppInner() {
               </div>
             )}
             {todayMatchingRide && (
-              <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center justify-between gap-2 rounded-xl p-4 text-sm" style={{ background: "#EAF3DE", color: "#27500A" }}>
+              <div className="mx-auto mb-4 flex w-full max-w-[430px] items-center justify-between gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--success-bg)", color: "var(--success-text)" }}>
                 <span>
                   Your <strong>{todayMatchingRide.label}</strong> is today at {todayMatchingRide.time_of_day}.
                 </span>
@@ -1352,13 +1357,13 @@ function AppInner() {
         )}
 
         {creatingBooking && (
-          <div className="mx-auto flex w-full max-w-[400px] flex-col items-center gap-3 p-10 text-center text-sm text-[#5F5E5A]">
+          <div className="mx-auto flex w-full max-w-[430px] flex-col items-center gap-3 p-10 text-center text-sm text-[var(--text-secondary)]">
             Creating your booking…
           </div>
         )}
 
         {bookingError && !creatingBooking && (
-          <div className="mx-auto flex w-full max-w-[400px] items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+          <div className="mx-auto flex w-full max-w-[430px] items-center gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
             <AlertCircle size={16} /> {bookingError}
           </div>
         )}
@@ -1376,7 +1381,7 @@ function AppInner() {
         )}
 
         {screen === "payment" && !bookingResult && !creatingBooking && (
-          <div className="mx-auto w-full max-w-[400px] p-10 text-center text-sm text-[#8C8977]">
+          <div className="mx-auto w-full max-w-[430px] p-10 text-center text-sm text-[var(--text-muted)]">
             No booking yet — go through "2. Fare estimate" and tap "Confirm & pay" first.
           </div>
         )}
@@ -1445,30 +1450,30 @@ function AppInner() {
         {screen === "account" && (
           <>
             {loadingAccount ? (
-              <div className="mx-auto w-full max-w-[400px] p-5">
+              <div className="mx-auto w-full max-w-[430px] p-5">
                 <button
                   onClick={goBack}
                   className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-                  style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
+                  style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-dropdown)" }}
                   aria-label="Back"
                 >
-                  <ArrowLeft size={15} color="#5F5E5A" />
+                  <ArrowLeft size={17} color="var(--text-primary)" />
                 </button>
-                <div className="flex items-center justify-center gap-2 p-10 text-sm text-[#5F5E5A]">
+                <div className="flex items-center justify-center gap-2 p-10 text-sm text-[var(--text-secondary)]">
                   <Loader2 size={16} className="animate-spin" /> Loading your account…
                 </div>
               </div>
             ) : accountError ? (
-              <div className="mx-auto w-full max-w-[400px] p-5">
+              <div className="mx-auto w-full max-w-[430px] p-5">
                 <button
                   onClick={goBack}
                   className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-                  style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
+                  style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-dropdown)" }}
                   aria-label="Back"
                 >
-                  <ArrowLeft size={15} color="#5F5E5A" />
+                  <ArrowLeft size={17} color="var(--text-primary)" />
                 </button>
-                <div className="flex items-center gap-2 rounded-xl p-4 text-sm" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                <div className="flex items-center gap-2 rounded-2xl p-4 text-sm" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
                   <AlertCircle size={16} /> {accountError}
                 </div>
               </div>

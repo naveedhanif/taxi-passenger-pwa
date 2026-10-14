@@ -137,24 +137,24 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
   }
 
   return (
-    <div className="rounded-xl" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+    <div className="rounded-2xl" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
       <audio ref={audioRef} src="/message-pop.wav" preload="auto" />
       {!hideHeader && (
-        <div className="flex items-center gap-2 border-b border-[#ECE9E0] px-3.5 py-2.5 text-xs font-semibold text-[#5F5E5A]">
+        <div className="flex items-center gap-2 border-b border-[var(--border-card)] px-3.5 py-2.5 text-xs font-semibold text-[var(--text-secondary)]">
           <MessageCircle size={13} /> Messages
         </div>
       )}
       <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ maxHeight: maxListHeight }}>
         {!loaded ? (
-          <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[#8C8977]">
+          <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[var(--text-muted)]">
             <Loader2 size={12} className="animate-spin" /> Loading…
           </div>
         ) : loadError ? (
-          <div className="flex items-center justify-center gap-1.5 py-4 text-center text-xs" style={{ color: "#791F1F" }}>
+          <div className="flex items-center justify-center gap-1.5 py-4 text-center text-xs" style={{ color: "var(--error-text)" }}>
             <AlertCircle size={12} /> {loadError}
           </div>
         ) : messages.length === 0 ? (
-          <div className="py-4 text-center text-xs text-[#8C8977]">No messages yet — say hello!</div>
+          <div className="py-4 text-center text-xs text-[var(--text-muted)]">No messages yet — say hello!</div>
         ) : (
           messages.map((m) => (
             <div key={m.id} className={`flex ${m.sender_role === selfRole ? "justify-end" : "justify-start"}`}>
@@ -163,7 +163,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
                 style={
                   m.sender_role === selfRole
                     ? { background: "var(--accent-gradient)", color: "var(--on-brand)" }
-                    : { background: "#F0EEE7", color: "#2C2C2A" }
+                    : { background: "var(--bg-card-alt)", color: "var(--text-primary)" }
                 }
               >
                 {m.body}
@@ -172,7 +172,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
           ))
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-[#ECE9E0] p-2.5">
+      <div className="flex items-center gap-2 border-t border-[var(--border-card)] p-2.5">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -183,8 +183,8 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
             }
           }}
           placeholder="Type a message…"
-          className="flex-1 rounded-full px-3.5 py-2 text-xs text-[#2C2C2A] placeholder:text-[#B4B2A9]"
-          style={{ background: "#F0EEE7" }}
+          className="flex-1 rounded-full px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+          style={{ background: "var(--bg-card-alt)" }}
         />
         <button
           onClick={handleSend}

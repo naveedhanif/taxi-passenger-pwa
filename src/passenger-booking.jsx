@@ -4,6 +4,8 @@ import { MapPin, Calendar, Clock, ArrowRight, User, Navigation, LocateFixed, Loa
 import { searchAddress, retrieveSuggestion, reverseGeocode, createSearchSessionToken, suggestionLabel } from "./mapboxClient";
 import { supabase } from "./supabaseClient.js";
 import { formatPhoneForLinks } from "./phoneLinks.js";
+import BookingMap from "./BookingMap.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -13,51 +15,6 @@ function useGoogleFont() {
     document.head.appendChild(link);
     return () => document.head.removeChild(link);
   }, []);
-}
-
-function MapPreview({ hasRoute }) {
-  return (
-    <div
-      className="mb-5 overflow-hidden rounded-xl"
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border-card)",
-        boxShadow: "var(--shadow-raised)",
-      }}
-    >
-      <svg viewBox="0 0 400 180" className="block w-full" style={{ height: 150 }}>
-        <rect width="400" height="180" fill="var(--bg-card-alt)" />
-        {/* stylized road grid — not a real map, a schematic stand-in */}
-        {[40, 110, 180, 250, 320].map((x) => (
-          <line key={x} x1={x} y1="0" x2={x} y2="180" stroke="var(--border-card)" strokeWidth="2" />
-        ))}
-        {[30, 80, 130, 180].map((y) => (
-          <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="var(--border-card)" strokeWidth="2" />
-        ))}
-
-        {hasRoute ? (
-          <>
-            <path
-              d="M 70 140 Q 180 60 330 45"
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="3"
-              strokeDasharray="7 6"
-              strokeLinecap="round"
-            />
-            <circle cx="70" cy="140" r="7" fill="var(--text-primary)" />
-            <circle cx="70" cy="140" r="3" fill="var(--bg-card)" />
-            <circle cx="330" cy="45" r="7" fill="var(--accent)" />
-            <circle cx="330" cy="45" r="3" fill="var(--bg-card)" />
-          </>
-        ) : (
-          <text x="200" y="94" textAnchor="middle" fontSize="12" fill="var(--text-muted)" fontFamily="Inter">
-            Enter pickup and drop-off to preview your route
-          </text>
-        )}
-      </svg>
-    </div>
-  );
 }
 
 const DAY_OPTIONS = [
@@ -610,73 +567,85 @@ export default function PassengerBooking({
     );
   }
 
+  const firstName = customer?.name && !nameLooksLikePlaceholder ? customer.name.split(" ")[0] : null;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const stopPoints = stops.filter((s) => s.coords).map((s) => s.coords);
+
   return (
-    <div
-      className="mx-auto w-full max-w-[400px] p-5"
-      style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}
-    >
-      {/* Top bar */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+    <div className="relative" style={{ fontFamily: "Inter" }}>
+      {/* Real map behind everything, with the booking form as a sheet over it */}
+      <BookingMap pickup={pickupCoords} dropoff={dropoffCoords} stops={stopPoints} />
+
+      <div className="relative z-10 mx-auto w-full max-w-[430px]" style={{ marginTop: "calc(-30vh - 36px)" }}>
+        {/* Floating header over the map: brand on the left, theme + account on the right */}
+        <div className="flex items-center justify-between px-4 pt-1">
           <div
-            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
-            style={{
-              background: "linear-gradient(155deg, var(--bg-input), var(--bg-card-alt))",
-              boxShadow: "var(--shadow-btn)",
-            }}
+            className="flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4"
+            style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-dropdown)" }}
           >
-            {driverPhotoUrl ? (
-              <img src={driverPhotoUrl} alt={businessName || "Driver"} className="h-full w-full object-cover" />
-            ) : (
-              <Navigation size={17} color="var(--accent)" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
-                {businessName || "Loading…"}
-              </span>
-              {licenceVerified && (
-                <span
-                  className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5"
-                  style={{ background: "var(--success-bg)" }}
-                  title="This driver's SPSV licence has been verified against the National Transport Authority's public register"
-                >
-                  <ShieldCheck size={10} color="var(--success-text)" />
-                  <span className="text-[9px] font-semibold" style={{ color: "var(--success-text)" }}>Verified</span>
-                </span>
+            <div
+              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full"
+              style={{ background: "var(--accent-gradient)" }}
+            >
+              {driverPhotoUrl ? (
+                <img src={driverPhotoUrl} alt={businessName || "Driver"} className="h-full w-full object-cover" />
+              ) : (
+                <Car size={18} color="var(--on-brand)" />
               )}
             </div>
-            <div className="text-[11px] text-[var(--text-secondary)]">Dublin, IE</div>
+            <div className="leading-tight">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
+                  {businessName || "Loading…"}
+                </span>
+                {licenceVerified && (
+                  <span title="This driver's SPSV licence has been verified against the National Transport Authority's public register">
+                    <ShieldCheck size={13} color="var(--success-text)" />
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-[var(--text-secondary)]">Dublin, IE · Pre-book rides</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={onOpenAccount}
+              className="flex h-11 w-11 items-center justify-center rounded-full"
+              style={{ background: "var(--bg-card)", boxShadow: "var(--shadow-dropdown)" }}
+              aria-label="Sign in / account"
+            >
+              <User size={16} color="var(--text-primary)" />
+            </button>
           </div>
         </div>
-        <button
-          onClick={onOpenAccount}
-          className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{
-            background: "var(--bg-card-alt)",
-            boxShadow: "var(--shadow-btn)",
-          }}
-          aria-label="Sign in / account"
-        >
-          <User size={15} color="var(--text-secondary)" />
-        </button>
-      </div>
 
-      {/* Hero */}
-      <div className="mb-5">
+        {/* The sheet */}
         <div
-          className="text-2xl leading-tight text-[var(--text-primary)]"
-          style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}
+          className="rounded-t-[28px] px-5 pb-28 pt-3"
+          style={{
+            marginTop: "calc(30vh - 56px)",
+            background: "var(--bg-page)",
+            boxShadow: "0 -10px 30px rgba(17,17,17,0.14)",
+            minHeight: "72vh",
+          }}
         >
-          Book your ride,
-          <br />
-          ahead of time.
-        </div>
-        <div className="mt-1.5 text-sm text-[var(--text-secondary)]">
-          Pre-book with {businessName ? businessName.split(" ")[0] : "your driver"} — no app to download, just a quick form.
-        </div>
-      </div>
+          <div className="mx-auto mb-4 h-1 w-10 rounded-full" style={{ background: "var(--border-input)" }} />
+
+          {/* Greeting */}
+          <div className="mb-5">
+            <div className="text-[13px] text-[var(--text-secondary)]">
+              {greeting}
+              {firstName ? "," : ""}
+            </div>
+            <div className="text-2xl leading-tight text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700 }}>
+              {firstName ? `${firstName} 👋` : "Where are you headed?"}
+            </div>
+            <div className="mt-1 text-sm text-[var(--text-secondary)]">
+              Pre-book with {businessName ? businessName.split(" ")[0] : "your driver"} — no app to download, just a quick form.
+            </div>
+          </div>
 
       {/* Vehicle + rating strip — tappable, opens the full driver
           profile with real reviews (previously just a static display
@@ -751,8 +720,6 @@ export default function PassengerBooking({
           </a>
         </div>
       )}
-
-      <MapPreview hasRoute={pickup.trim().length > 0 && dropoff.trim().length > 0} />
 
       {/* Booking form card */}
       <div
@@ -1143,7 +1110,8 @@ export default function PassengerBooking({
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }
-

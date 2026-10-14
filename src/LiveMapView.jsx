@@ -80,7 +80,7 @@ export default function LiveMapView({ token, pickup, dropoff, routeGeometry }) {
   if (!token) {
     return (
       <div
-        className="flex h-56 items-center justify-center rounded-xl text-xs text-[#8C8977]"
+        className="flex h-56 items-center justify-center rounded-xl text-xs text-[var(--text-muted)]"
         style={{ background: "#EAE8E1" }}
       >
         Map unavailable — no Mapbox token configured

@@ -91,3 +91,10 @@
   color: var(--on-brand) !important;
 }
 
+
+/* Keep the map's required attribution visible above the booking sheet,
+   which overlaps the bottom of the map. */
+.booking-map .mapboxgl-ctrl-bottom-left,
+.booking-map .mapboxgl-ctrl-bottom-right {
+  margin-bottom: 40px;
+}

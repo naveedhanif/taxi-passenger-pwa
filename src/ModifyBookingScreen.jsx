@@ -165,7 +165,7 @@ export default function ModifyBookingScreen({ booking, bookingId, guestAccessTok
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: "var(--bg-page)" }}>
-      <div className="mx-auto w-full max-w-[400px] p-5">
+      <div className="mx-auto w-full max-w-[430px] p-5">
         <div className="mb-5 flex items-center gap-3">
           <button onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}>
             <ArrowLeft size={15} color="var(--text-secondary)" />

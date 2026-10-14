@@ -15,7 +15,7 @@ function StarRow({ rating, size = 14 }) {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} size={size} fill={n <= rating ? "#F5B300" : "none"} color={n <= rating ? "#F5B300" : "#D3D1C7"} strokeWidth={1.5} />
+        <Star key={n} size={size} fill={n <= rating ? "#FFC400" : "none"} color={n <= rating ? "#FFC400" : "#D3D1C7"} strokeWidth={1.5} />
       ))}
     </div>
   );
@@ -75,19 +75,19 @@ export default function DriverProfileScreen({
   }, [driverId]);
 
   return (
-    <div className="mx-auto w-full max-w-[400px] p-5" style={{ fontFamily: "Inter" }}>
+    <div className="mx-auto w-full max-w-[430px] p-5" style={{ fontFamily: "Inter" }}>
       <button
         onClick={onBack}
         className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-        style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
+        style={{ background: "var(--bg-card-alt)", boxShadow: "var(--shadow-btn)" }}
       >
-        <ArrowLeft size={15} color="#5F5E5A" />
+        <ArrowLeft size={15} color="var(--text-secondary)" />
       </button>
 
       <div className="mb-5 flex flex-col items-center text-center">
         <div
           className="mb-3 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full"
-          style={{ background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)", boxShadow: "4px 4px 10px rgba(44,44,42,0.16)" }}
+          style={{ background: "var(--bg-card-alt)", boxShadow: "4px 4px 10px rgba(44,44,42,0.16)" }}
         >
           {driverPhotoUrl ? (
             <img src={driverPhotoUrl} alt={businessName} className="h-full w-full object-cover" />
@@ -95,70 +95,70 @@ export default function DriverProfileScreen({
             <Car size={30} color="var(--accent)" />
           )}
         </div>
-        <div className="text-lg font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
+        <div className="text-lg font-bold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
           {businessName || "Driver"}
         </div>
         {licenceVerified && (
-          <div className="mt-1 flex items-center gap-1 text-xs" style={{ color: "#27500A" }}>
+          <div className="mt-1 flex items-center gap-1 text-xs" style={{ color: "var(--success-text)" }}>
             <ShieldCheck size={12} /> Verified SPSV licence
           </div>
         )}
         {avgRating != null && (
           <div className="mt-2 flex items-center gap-2">
             <StarRow rating={Math.round(avgRating)} size={16} />
-            <span className="text-sm font-semibold text-[#2C2C2A]">{avgRating.toFixed(1)}</span>
-            <span className="text-xs text-[#8C8977]">({reviewCount})</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{avgRating.toFixed(1)}</span>
+            <span className="text-xs text-[var(--text-muted)]">({reviewCount})</span>
           </div>
         )}
       </div>
 
       {vehicle && (
-        <div className="mb-5 flex items-center gap-3 rounded-xl p-4" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+        <div className="mb-5 flex items-center gap-3 rounded-2xl p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
           <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl"
-            style={{ background: "#F1EFE8" }}
+            className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
+            style={{ background: "var(--bg-card-alt)" }}
           >
             {vehiclePhotoUrl ? (
               <img src={vehiclePhotoUrl} alt="Vehicle" className="h-full w-full object-cover" />
             ) : (
-              <Car size={22} color="#8C8977" />
+              <Car size={22} color="var(--text-muted)" />
             )}
           </div>
           <div>
-            <div className="text-sm font-semibold text-[#2C2C2A]">
+            <div className="text-sm font-semibold text-[var(--text-primary)]">
               {vehicle.make} {vehicle.model} · {vehicle.color}
             </div>
-            <div className="flex items-center gap-1 text-xs text-[#8C8977]">
+            <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
               <Users size={11} /> {vehicle.seats} passenger seats
             </div>
           </div>
         </div>
       )}
 
-      <div className="mb-3 text-sm font-semibold text-[#2C2C2A]">Reviews</div>
+      <div className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Reviews</div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-sm text-[#5F5E5A]">
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-[var(--text-secondary)]">
           <Loader2 size={16} className="animate-spin" /> Loading…
         </div>
       ) : errorMessage ? (
-        <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+        <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
           <AlertCircle size={13} /> {errorMessage}
         </div>
       ) : reviews.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl p-8 text-center" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
-          <MessageSquareQuote size={20} color="#B4B2A9" />
-          <div className="text-xs text-[#8C8977]">No reviews yet.</div>
+        <div className="flex flex-col items-center gap-2 rounded-2xl p-8 text-center" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
+          <MessageSquareQuote size={20} color="var(--text-muted)" />
+          <div className="text-xs text-[var(--text-muted)]">No reviews yet.</div>
         </div>
       ) : (
         <div className="space-y-2.5">
           {reviews.map((r) => (
-            <div key={r.id} className="rounded-xl p-3.5" style={{ background: "#FBFAF6", border: "1px solid #ECE9E0" }}>
+            <div key={r.id} className="rounded-2xl p-3.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)" }}>
               <div className="mb-1 flex items-center justify-between">
                 <StarRow rating={r.rating} />
-                <span className="text-[11px] text-[#8C8977]">{new Date(r.created_at).toLocaleDateString()}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">{new Date(r.created_at).toLocaleDateString()}</span>
               </div>
-              {r.comment && <p className="text-xs text-[#2C2C2A]">{r.comment}</p>}
+              {r.comment && <p className="text-xs text-[var(--text-primary)]">{r.comment}</p>}
             </div>
           ))}
         </div>

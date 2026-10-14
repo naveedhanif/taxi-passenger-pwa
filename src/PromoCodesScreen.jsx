@@ -153,7 +153,7 @@ export default function PromoCodesScreen({ driverId, customerSessionToken, onBac
   const inactive = promos.filter((p) => p.status !== "active");
 
   return (
-    <div className="mx-auto w-full max-w-[400px] p-5" style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}>
+    <div className="mx-auto w-full max-w-[430px] p-5" style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}>
       <div className="mb-5 flex items-center justify-between">
         <button
           onClick={onBack}
