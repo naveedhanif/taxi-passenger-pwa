@@ -49,7 +49,7 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
 
       <div
         className="mb-6 w-full rounded-xl p-4 text-left"
-        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
       >
         <div className="space-y-2.5 text-sm">
           <div className="flex items-start gap-2">
@@ -60,7 +60,7 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <MapPin size={14} color="#185FA5" className="mt-0.5" />
+            <MapPin size={14} color="var(--accent)" className="mt-0.5" />
             <div>
               <div className="text-[#2C2C2A]">{dropoff.address}</div>
               <div className="text-[11px] text-[#8C8977]">Drop-off</div>
@@ -86,7 +86,7 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
       {phoneLinks && (
         <div
           className="mb-6 w-full rounded-xl p-4"
-          style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+          style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
         >
           <div className="mb-2 text-left text-xs font-medium text-[#5F5E5A]">
             Need to reach {driverName || "your driver"}?
@@ -115,8 +115,8 @@ export default function BookingConfirmedScreen({ pickup, dropoff, scheduledTime,
         onClick={onViewBooking}
         className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
         style={{
-          background: "linear-gradient(135deg, #378ADD, #0C447C)",
-          boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+          background: "var(--accent-gradient)",
+          boxShadow: "var(--shadow-accent-btn)",
         }}
       >
         View my booking <ArrowRight size={15} />

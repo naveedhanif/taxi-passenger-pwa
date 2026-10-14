@@ -179,7 +179,7 @@ export default function FareEstimateScreen({
         <button
           onClick={onBack}
           className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
         >
           <ArrowRight size={15} color="#5F5E5A" style={{ transform: "rotate(180deg)" }} />
         </button>
@@ -189,7 +189,7 @@ export default function FareEstimateScreen({
 
       {status === "loading" && (
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-[#5F5E5A]">
-          <Loader2 size={22} className="animate-spin" color="#185FA5" />
+          <Loader2 size={22} className="animate-spin" color="var(--accent)" />
           Calculating your fare…
         </div>
       )}
@@ -208,7 +208,7 @@ export default function FareEstimateScreen({
         <>
           <div
             className="mb-4 overflow-hidden rounded-xl"
-            style={{ border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
           >
             <LiveMapView
               token={mapboxToken}
@@ -234,7 +234,7 @@ export default function FareEstimateScreen({
 
           <div
             className="mb-4 flex items-center justify-between rounded-xl px-4 py-3"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
           >
             <div className="flex items-center gap-1.5 text-xs text-[#5F5E5A]">
               <RouteIcon size={13} /> {route.distanceKm} km
@@ -255,7 +255,7 @@ export default function FareEstimateScreen({
               passenger has to hand explicitly and wants to use instead. */}
           <div
             className="mb-4 rounded-xl p-4"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
           >
             {manualPromo ? (
               <div className="flex items-center justify-between">
@@ -292,7 +292,7 @@ export default function FareEstimateScreen({
                     onClick={handleApplyCode}
                     disabled={manualStatus === "checking" || !manualCode.trim()}
                     className="flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                    style={{ background: "#185FA5" }}
+                    style={{ background: "var(--accent-gradient)" }}
                   >
                     {manualStatus === "checking" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                     Apply
@@ -314,7 +314,7 @@ export default function FareEstimateScreen({
 
           <div
             className="mb-4 rounded-xl p-4"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
           >
             <div className="mb-3 text-xs font-medium text-[#5F5E5A]">Fare breakdown</div>
             <div className="space-y-2 text-sm text-[#2C2C2A]">
@@ -347,7 +347,7 @@ export default function FareEstimateScreen({
           {/* Pay now vs pay later */}
           <div
             className="mb-4 rounded-xl p-4"
-            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+            style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
           >
             <div className="mb-3 text-xs font-medium text-[#5F5E5A]">How do you want to pay?</div>
             <div className="grid grid-cols-2 gap-2.5">
@@ -357,10 +357,10 @@ export default function FareEstimateScreen({
                 className="flex flex-col items-start gap-1.5 rounded-lg p-3 text-left transition-all"
                 style={{
                   background: paymentTiming === "now" ? "#EAF1FB" : "#FFFFFF",
-                  border: paymentTiming === "now" ? "1.5px solid #185FA5" : "1px solid #ECE9E0",
+                  border: paymentTiming === "now" ? "1.5px solid var(--accent)" : "1px solid #ECE9E0",
                 }}
               >
-                <CreditCard size={16} color={paymentTiming === "now" ? "#185FA5" : "#5F5E5A"} />
+                <CreditCard size={16} color={paymentTiming === "now" ? "var(--accent)" : "#5F5E5A"} />
                 <span className="text-xs font-semibold text-[#2C2C2A]">Pay now</span>
                 <span className="text-[11px] text-[#5F5E5A]">Full fare charged by card, right now</span>
               </button>
@@ -370,10 +370,10 @@ export default function FareEstimateScreen({
                 className="flex flex-col items-start gap-1.5 rounded-lg p-3 text-left transition-all"
                 style={{
                   background: paymentTiming === "later" ? "#EAF1FB" : "#FFFFFF",
-                  border: paymentTiming === "later" ? "1.5px solid #185FA5" : "1px solid #ECE9E0",
+                  border: paymentTiming === "later" ? "1.5px solid var(--accent)" : "1px solid #ECE9E0",
                 }}
               >
-                <Banknote size={16} color={paymentTiming === "later" ? "#185FA5" : "#5F5E5A"} />
+                <Banknote size={16} color={paymentTiming === "later" ? "var(--accent)" : "#5F5E5A"} />
                 <span className="text-xs font-semibold text-[#2C2C2A]">Pay in the taxi</span>
                 <span className="text-[11px] text-[#5F5E5A]">{depositEnabled ? "Cash or card after the ride" : "No deposit — pay after the ride"}</span>
               </button>
@@ -407,8 +407,8 @@ export default function FareEstimateScreen({
             }
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
             style={{
-              background: "linear-gradient(135deg, #378ADD, #0C447C)",
-              boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+              background: "var(--accent-gradient)",
+              boxShadow: "var(--shadow-accent-btn)",
             }}
           >
             {paymentTiming === "now"

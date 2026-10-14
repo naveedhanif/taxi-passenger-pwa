@@ -44,7 +44,7 @@ export default function LiveMapView({ token, pickup, dropoff, routeGeometry }) {
         .addTo(map);
 
       // Dropoff marker
-      new mapboxgl.Marker({ color: "#185FA5" })
+      new mapboxgl.Marker({ color: "#111111" })
         .setLngLat([dropoff.lng, dropoff.lat])
         .addTo(map);
 
@@ -59,7 +59,7 @@ export default function LiveMapView({ token, pickup, dropoff, routeGeometry }) {
           type: "line",
           source: "route",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#185FA5", "line-width": 4, "line-opacity": 0.85 },
+          paint: { "line-color": "#111111", "line-width": 4, "line-opacity": 0.85 },
         });
 
         // Fit the map to show the whole route, not just the start point

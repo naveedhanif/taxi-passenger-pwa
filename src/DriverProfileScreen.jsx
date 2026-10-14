@@ -79,7 +79,7 @@ export default function DriverProfileScreen({
       <button
         onClick={onBack}
         className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-        style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+        style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
       >
         <ArrowLeft size={15} color="#5F5E5A" />
       </button>
@@ -92,7 +92,7 @@ export default function DriverProfileScreen({
           {driverPhotoUrl ? (
             <img src={driverPhotoUrl} alt={businessName} className="h-full w-full object-cover" />
           ) : (
-            <Car size={30} color="#185FA5" />
+            <Car size={30} color="var(--accent)" />
           )}
         </div>
         <div className="text-lg font-bold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>

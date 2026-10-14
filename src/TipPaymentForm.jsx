@@ -70,7 +70,7 @@ function TipForm({ bookingId, onSuccess, onError }) {
         type="submit"
         disabled={!stripe || !elementReady || submitting}
         className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
-        style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+        style={{ background: "var(--accent-gradient)" }}
       >
         {submitting ? <Loader2 size={15} className="animate-spin" /> : null}
         {submitting ? "Processing…" : "Confirm tip"}

@@ -26,14 +26,14 @@ export default function GuestAccountChoice({ onCreateAccount, onDismiss }) {
     >
       <div
         className="rounded-2xl p-5"
-        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
       >
         <div className="mb-3 flex items-start justify-between">
           <div
             className="flex h-10 w-10 items-center justify-center rounded-full"
-            style={{ background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)", boxShadow: "3px 3px 8px rgba(44,44,42,0.14), -2px -2px 6px rgba(255,255,255,0.9)" }}
+            style={{ background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)", boxShadow: "var(--shadow-btn)" }}
           >
-            <UserPlus size={17} color="#185FA5" />
+            <UserPlus size={17} color="var(--accent)" />
           </div>
           <button onClick={onDismiss} className="text-[#8C8977]">
             <X size={16} />
@@ -51,8 +51,8 @@ export default function GuestAccountChoice({ onCreateAccount, onDismiss }) {
           onClick={onCreateAccount}
           className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white"
           style={{
-            background: "linear-gradient(135deg, #378ADD, #0C447C)",
-            boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+            background: "var(--accent-gradient)",
+            boxShadow: "var(--shadow-accent-btn)",
           }}
         >
           Create account

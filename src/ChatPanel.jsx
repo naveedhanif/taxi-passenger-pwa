@@ -162,7 +162,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
                 className="max-w-[75%] rounded-2xl px-3 py-1.5 text-xs"
                 style={
                   m.sender_role === selfRole
-                    ? { background: "#185FA5", color: "white" }
+                    ? { background: "var(--accent-gradient)", color: "var(--on-brand)" }
                     : { background: "#F0EEE7", color: "#2C2C2A" }
                 }
               >
@@ -190,7 +190,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
           onClick={handleSend}
           disabled={!draft.trim() || sending}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
-          style={{ background: "#185FA5" }}
+          style={{ background: "var(--accent-gradient)" }}
           aria-label="Send"
         >
           <Send size={13} />

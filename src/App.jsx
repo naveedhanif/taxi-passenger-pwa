@@ -48,7 +48,7 @@ function guestBookingStorageKey(driverId) {
 
 const STATUS_ALERT_STYLES = {
   success: { background: "#EAF3DE", color: "#27500A", border: "1px solid #CFE3B8" },
-  info: { background: "#E6F1FB", color: "#0C447C", border: "1px solid #C3DCF3" },
+  info: { background: "var(--info-bg)", color: "var(--info-text)", border: "1px solid var(--border-card)" },
   error: { background: "#FCEBEB", color: "#791F1F", border: "1px solid #F3C6C6" },
 };
 
@@ -1173,10 +1173,10 @@ function AppInner() {
             <button
               key={s.id}
               onClick={() => selectScreen(s.id)}
-              className="rounded-lg px-4 py-3.5 text-left text-sm font-medium"
+              className="rounded-2xl px-4 py-3.5 text-left text-sm font-semibold"
               style={{
                 background: screen === s.id ? "var(--accent)" : "var(--bg-card-alt)",
-                color: screen === s.id ? "white" : "var(--text-secondary)",
+                color: screen === s.id ? "var(--on-accent)" : "var(--text-secondary)",
               }}
             >
               {s.label}
@@ -1194,10 +1194,10 @@ function AppInner() {
           <button
             key={s.id}
             onClick={() => go(s.id)}
-            className="rounded-lg px-4 py-2.5 text-sm font-medium"
+            className="rounded-full px-5 py-2.5 text-sm font-semibold"
             style={{
               background: screen === s.id ? "var(--accent)" : "var(--bg-card-alt)",
-              color: screen === s.id ? "white" : "var(--text-secondary)",
+              color: screen === s.id ? "var(--on-accent)" : "var(--text-secondary)",
             }}
           >
             {s.label}
@@ -1265,7 +1265,7 @@ function AppInner() {
         {screen === "booking" && (
           <>
             {!resolvingSession && activeGuestBooking && (
-              <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center justify-between gap-2 rounded-xl p-4 text-sm" style={{ background: "#E6F1FB", color: "#0C447C" }}>
+              <div className="mx-auto mb-4 flex w-full max-w-[400px] items-center justify-between gap-2 rounded-xl p-4 text-sm" style={{ background: "var(--info-bg)", color: "var(--info-text)" }}>
                 <span>You have an active booking with this driver.</span>
                 <button onClick={() => go("status")} className="font-semibold underline shrink-0">
                   View status
@@ -1449,7 +1449,7 @@ function AppInner() {
                 <button
                   onClick={goBack}
                   className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-                  style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                  style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
                   aria-label="Back"
                 >
                   <ArrowLeft size={15} color="#5F5E5A" />
@@ -1463,7 +1463,7 @@ function AppInner() {
                 <button
                   onClick={goBack}
                   className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-                  style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                  style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
                   aria-label="Back"
                 >
                   <ArrowLeft size={15} color="#5F5E5A" />
@@ -1586,8 +1586,8 @@ function AppInner() {
           sitting on top of the chat's own input, making it unreachable. */}
       {!chatOpen && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 py-2 sm:hidden"
-          style={{ background: "var(--bg-card)", borderColor: "var(--border-card)", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-around border-t px-2 pt-2 sm:hidden"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-card)", boxShadow: "0 -4px 18px rgba(17,17,17,0.06)", paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
           {SCREENS.map((s) => {
           const Icon = s.id === "booking" ? Car : s.id === "status" ? MapPin : s.id === "promos" ? Tag : User;
@@ -1597,10 +1597,15 @@ function AppInner() {
             <button
               key={s.id}
               onClick={() => go(s.id)}
-              className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium"
-              style={{ color: isActive ? "var(--accent)" : "var(--text-muted)" }}
+              className="flex flex-1 flex-col items-center gap-1 py-1 text-[10px] font-semibold"
+              style={{ color: isActive ? "var(--text-primary)" : "var(--text-muted)" }}
             >
-              <Icon size={20} />
+              <span
+                className="flex h-8 w-14 items-center justify-center rounded-full transition-colors"
+                style={{ background: isActive ? "var(--brand)" : "transparent", color: isActive ? "var(--on-brand)" : "inherit" }}
+              >
+                <Icon size={20} />
+              </span>
               {shortLabel}
             </button>
           );

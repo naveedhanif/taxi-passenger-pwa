@@ -126,14 +126,20 @@ Deno.serve(async (req) => {
     ]);
 
     // ---- Live position, only meaningful once the driver is actually en route ----
-    let position: { lat: number; lng: number } | null = null;
+    // live_tracking holds ONE row per driver, so it must be checked
+    // against THIS booking: otherwise a leftover point from the driver's
+    // previous trip could be shown to the next passenger.
+    let position: { lat: number; lng: number; updatedAt: string } | null = null;
     if (["en_route", "arrived"].includes(booking.status)) {
-      const { data: trackingRow } = await supabase
+      const { data: trackingRow, error: trackingError } = await supabase
         .from("live_tracking")
-        .select("lat, lng")
+        .select("lat, lng, booking_id, updated_at")
         .eq("driver_id", booking.driver_id)
         .maybeSingle();
-      if (trackingRow) position = { lat: trackingRow.lat, lng: trackingRow.lng };
+      if (trackingError) console.error("get-booking-status: live_tracking read failed:", trackingError.message);
+      if (trackingRow && trackingRow.booking_id === booking.id) {
+        position = { lat: trackingRow.lat, lng: trackingRow.lng, updatedAt: trackingRow.updated_at };
+      }
     }
 
     const relevantPaymentStatus = booking.payment_timing === "later" ? booking.deposit_payment_status : booking.payment_status;

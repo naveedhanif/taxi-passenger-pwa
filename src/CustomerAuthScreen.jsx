@@ -83,7 +83,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         <button
           onClick={onBack}
           className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
         >
           <ArrowLeft size={15} color="#5F5E5A" />
         </button>
@@ -93,7 +93,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
 
       {confirmationSent ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <Mail size={28} color="#185FA5" />
+          <Mail size={28} color="var(--accent)" />
           <div className="text-base font-semibold text-[#2C2C2A]" style={{ fontFamily: "'Space Grotesk'" }}>
             Check your email
           </div>
@@ -105,7 +105,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
               setConfirmationSent(false);
               setMode("signin");
             }}
-            className="mt-2 text-xs font-medium text-[#185FA5]"
+            className="mt-2 text-xs font-medium text-(--accent) underline underline-offset-2"
           >
             Back to sign in
           </button>
@@ -148,7 +148,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
           type="submit"
           disabled={submitting}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
-          style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)", boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)" }}
+          style={{ background: "var(--accent-gradient)", boxShadow: "var(--shadow-accent-btn)" }}
         >
           {submitting ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
           {!submitting && <ArrowRight size={15} />}
@@ -157,7 +157,7 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
 
       <button
         onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
-        className="mt-4 w-full text-center text-xs font-medium text-[#185FA5]"
+        className="mt-4 w-full text-center text-xs font-medium text-(--accent) underline underline-offset-2"
       >
         {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
       </button>

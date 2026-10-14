@@ -173,7 +173,7 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
 
       <div
         className="rounded-xl p-4"
-        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)" }}
+        style={{ background: "#FBFAF6", border: "1px solid #ECE9E0", boxShadow: "var(--shadow-raised)" }}
       >
         <PaymentElement
           onReady={() => setElementReady(true)}
@@ -226,8 +226,8 @@ function PaymentForm({ amount, paymentTiming, balanceDue, bookingId, onSuccess }
         disabled={!stripe || !elementReady || submitting}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
         style={{
-          background: "linear-gradient(135deg, #378ADD, #0C447C)",
-          boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+          background: "var(--accent-gradient)",
+          boxShadow: "var(--shadow-accent-btn)",
         }}
       >
         {submitting
@@ -289,7 +289,7 @@ export default function PaymentScreen({ stripePublishableKey, clientSecret, book
   const appearance = {
     theme: "stripe",
     variables: {
-      colorPrimary: "#185FA5",
+      colorPrimary: "#111111",
       colorBackground: "#F0EEE7",
       colorText: "#2C2C2A",
       borderRadius: "10px",

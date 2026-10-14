@@ -26,20 +26,72 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || "";
 // that policy is verified live.
 const POLL_INTERVAL_MS = 8000;
 
-function lerp(a, b, t) {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+// How often the live ETA is recalculated. Each recalculation is one
+// Mapbox Directions request, so this is deliberately slow (the car moves
+// every 8s, but an ETA that changes every 8s is noise AND cost).
+const ETA_REFRESH_MS = 60000;
+
+// A position older than this is shown as "last seen", not "live" — e.g.
+// the driver switched to Google Maps and this app was backgrounded.
+const STALE_AFTER_SECONDS = 45;
+
+function useTick(ms) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(id);
+  }, [ms]);
+  return now;
 }
 
-// Fallback driver-position estimate for stages before the driver has an
-// actual live_tracking row yet — interpolated along a straight line
-// toward pickup so the map isn't empty. Once a real `position` comes
-// back from the server this is ignored entirely.
-const PROGRESS_ESTIMATE = { pending: 0, confirmed: 0, en_route: 0.55, arrived: 1, in_progress: 1, completed: 1, canceled: 0 };
+/**
+ * Minutes until the driver reaches the pickup, from real road routing.
+ * Only runs while the driver is en route AND has a real position, and
+ * refreshes at most once per ETA_REFRESH_MS. Returns null whenever it
+ * can't honestly say (no position, request failed) — never a guess.
+ */
+function useDriverEta({ position, pickup, status }) {
+  const [etaMinutes, setEtaMinutes] = useState(null);
+  const lastFetchRef = useRef(0);
+
+  useEffect(() => {
+    if (status !== "en_route" || !position || !pickup || !mapboxgl.accessToken) {
+      setEtaMinutes(null);
+      return;
+    }
+    if (Date.now() - lastFetchRef.current < ETA_REFRESH_MS) return;
+    lastFetchRef.current = Date.now();
+
+    // Deliberately NOT aborted when the position updates mid-request: the
+    // 60s throttle above would then block a retry and the ETA would never
+    // appear.
+    const url =
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${position.lng},${position.lat};${pickup.lng},${pickup.lat}` +
+      `?overview=false&access_token=${mapboxgl.accessToken}`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((json) => {
+        const seconds = json?.routes?.[0]?.duration;
+        if (typeof seconds === "number") setEtaMinutes(Math.max(1, Math.round(seconds / 60)));
+        else console.error("useDriverEta: no route in Directions response", json?.message || json);
+      })
+      .catch((err) => console.error("useDriverEta: Directions request failed:", err));
+  }, [status, position?.lat, position?.lng, pickup?.lat, pickup?.lng]);
+
+  return etaMinutes;
+}
+
+function formatAgo(seconds) {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s ago`;
+  const m = Math.round(seconds / 60);
+  return m < 60 ? `${m} min ago` : "over an hour ago";
+}
 
 function LiveTrackingMap({ pickup, dropoff, status, livePosition }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const driverMarkerRef = useRef(null);
+  const mapLoadedRef = useRef(false);
   const [missingToken] = useState(!mapboxgl.accessToken);
 
   const pickupLngLat = [pickup.lng, pickup.lat];
@@ -69,46 +121,74 @@ function LiveTrackingMap({ pickup, dropoff, status, livePosition }) {
         id: "route-line",
         type: "line",
         source: "route",
-        paint: { "line-color": "#185FA5", "line-width": 3, "line-dasharray": [0.3, 1.6] },
+        paint: { "line-color": "#111111", "line-width": 3, "line-dasharray": [0.3, 1.6] },
       });
 
       new mapboxgl.Marker({ color: "#639922" }).setLngLat(pickupLngLat).addTo(map);
       new mapboxgl.Marker({ color: "#A32D2D" }).setLngLat(dropoffLngLat).addTo(map);
 
-      const el = document.createElement("div");
-      el.style.width = "34px";
-      el.style.height = "34px";
-      el.style.borderRadius = "50%";
-      el.style.background = "linear-gradient(155deg, #FFFFFF, #E7E5DD)";
-      el.style.boxShadow = "4px 4px 10px rgba(44,44,42,0.16), -3px -3px 8px rgba(255,255,255,0.9)";
-      el.style.display = "flex";
-      el.style.alignItems = "center";
-      el.style.justifyContent = "center";
-      el.innerHTML =
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><path d="M5 17h14M5 17a2 2 0 100 4 2 2 0 000-4zm14 0a2 2 0 100 4 2 2 0 000-4zM5 17l1.5-6h11L19 17M6.5 11l1-3h9l1 3"/></svg>';
-
-      const startPos = livePosition
-        ? [livePosition.lng, livePosition.lat]
-        : lerp(dropoffLngLat, pickupLngLat, 1 - (PROGRESS_ESTIMATE[status] ?? 0));
-      driverMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat(startPos).addTo(map);
-
-      map.fitBounds([pickupLngLat, dropoffLngLat, startPos], { padding: 50, duration: 0 });
+      mapLoadedRef.current = true;
+      syncDriverMarker();
+      map.fitBounds(
+        livePosition
+          ? [pickupLngLat, dropoffLngLat, [livePosition.lng, livePosition.lat]]
+          : [pickupLngLat, dropoffLngLat],
+        { padding: 50, duration: 0 }
+      );
     });
 
     return () => {
       map.remove();
       mapRef.current = null;
+      mapLoadedRef.current = false;
+      driverMarkerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missingToken]);
 
-  // Move the driver marker whenever a fresh position/status comes in from polling
+  // Shows the car ONLY at a real, server-confirmed position. Previously a
+  // fake "estimated" marker was drawn when no position existed — misleading
+  // now that real tracking exists, so with no data there is simply no car.
+  function syncDriverMarker() {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+
+    if (!livePosition) {
+      if (driverMarkerRef.current) {
+        driverMarkerRef.current.remove();
+        driverMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const pos = [livePosition.lng, livePosition.lat];
+    if (!driverMarkerRef.current) {
+      const el = document.createElement("div");
+      el.style.width = "34px";
+      el.style.height = "34px";
+      el.style.borderRadius = "50%";
+      el.style.background = "linear-gradient(155deg, #FFFFFF, #E7E5DD)";
+      el.style.boxShadow = "var(--shadow-btn)";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+      el.innerHTML =
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2"><path d="M5 17h14M5 17a2 2 0 100 4 2 2 0 000-4zm14 0a2 2 0 100 4 2 2 0 000-4zM5 17l1.5-6h11L19 17M6.5 11l1-3h9l1 3"/></svg>';
+      driverMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat(pos).addTo(map);
+      map.fitBounds([pickupLngLat, dropoffLngLat, pos], { padding: 50, duration: 600 });
+    } else {
+      driverMarkerRef.current.setLngLat(pos);
+      // Re-frame only if the car has driven out of view, so the map
+      // doesn't jump around on every 8-second update.
+      if (!map.getBounds().contains(pos)) {
+        map.fitBounds([pickupLngLat, dropoffLngLat, pos], { padding: 50, duration: 600 });
+      }
+    }
+  }
+
+  // Move/create/remove the driver marker whenever a fresh position comes in
   useEffect(() => {
-    if (!driverMarkerRef.current) return;
-    const pos = livePosition
-      ? [livePosition.lng, livePosition.lat]
-      : lerp(dropoffLngLat, pickupLngLat, 1 - (PROGRESS_ESTIMATE[status] ?? 0));
-    driverMarkerRef.current.setLngLat(pos);
+    syncDriverMarker();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, livePosition?.lat, livePosition?.lng]);
 
@@ -153,7 +233,7 @@ function EmbossCard({ children, className = "" }) {
       style={{
         background: "#FBFAF6",
         border: "1px solid #ECE9E0",
-        boxShadow: "6px 6px 14px rgba(44,44,42,0.10), -6px -6px 14px rgba(255,255,255,0.85)",
+        boxShadow: "var(--shadow-raised)",
         borderRadius: 16,
       }}
     >
@@ -377,6 +457,14 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
     }
   }
 
+  // Hooks must run on every render, before any early return below.
+  const nowTick = useTick(5000);
+  const etaMinutes = useDriverEta({
+    position: data?.position ?? null,
+    pickup: data?.booking?.pickup ?? null,
+    status: data?.booking?.status,
+  });
+
   if (!bookingId) {
     return (
       <div className="mx-auto w-full max-w-[400px] p-10 text-center text-sm text-[#8C8977]">
@@ -399,7 +487,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         <button
           onClick={onBack}
           className="mb-4 flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
         >
           <ArrowLeft size={15} color="#5F5E5A" />
         </button>
@@ -428,7 +516,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         <button
           onClick={onBack}
           className="flex h-11 w-11 items-center justify-center rounded-full"
-          style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+          style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
         >
           <ArrowLeft size={15} color="#5F5E5A" />
         </button>
@@ -438,7 +526,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
             <button
               onClick={handleShareTrip}
               className="flex h-9 w-9 items-center justify-center rounded-full"
-              style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+              style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
               aria-label="Share trip"
               title="Share this trip with someone"
             >
@@ -460,10 +548,10 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
               className="flex h-10 w-10 items-center justify-center rounded-full"
               style={{
                 background: "linear-gradient(155deg, #FFFFFF, #E7E5DD)",
-                boxShadow: "3px 3px 8px rgba(44,44,42,0.14), -2px -2px 6px rgba(255,255,255,0.9)",
+                boxShadow: "var(--shadow-btn)",
               }}
             >
-              <Car size={18} color="#185FA5" />
+              <Car size={18} color="var(--accent)" />
             </div>
           )}
           <div>
@@ -491,9 +579,9 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           <div className="mt-4 flex items-center">
             {STAGES.map((s, i) => (
               <div key={s} className="flex flex-1 items-center last:flex-none">
-                <div className="h-2 w-2 rounded-full" style={{ background: i <= stageIndex ? "#185FA5" : "#D3D1C7" }} />
+                <div className="h-2 w-2 rounded-full" style={{ background: i <= stageIndex ? "var(--accent)" : "#D3D1C7" }} />
                 {i < STAGES.length - 1 && (
-                  <div className="mx-1 h-0.5 flex-1" style={{ background: i < stageIndex ? "#185FA5" : "#D3D1C7" }} />
+                  <div className="mx-1 h-0.5 flex-1" style={{ background: i < stageIndex ? "var(--accent)" : "#D3D1C7" }} />
                 )}
               </div>
             ))}
@@ -506,11 +594,31 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         <EmbossCard className="mb-4 overflow-hidden">
           <div className="relative">
             <LiveTrackingMap pickup={booking.pickup} dropoff={booking.dropoff} status={status} livePosition={position} />
-            {!position && (
-              <div className="absolute bottom-3 right-3 rounded-full bg-white px-3 py-1 text-[11px] font-medium text-[#2C2C2A] shadow-sm">
-                {status === "en_route" ? "On the way" : "Not yet en route"}
-              </div>
-            )}
+            {(() => {
+              // Honest states only: a live ETA when we have a real
+              // position, "last seen" when it has gone quiet, and a plain
+              // waiting message when there's no position at all.
+              const ageSeconds = position?.updatedAt ? Math.max(0, (nowTick - new Date(position.updatedAt).getTime()) / 1000) : null;
+              const isStale = ageSeconds != null && ageSeconds > STALE_AFTER_SECONDS;
+              let label;
+              if (!position) {
+                label = status === "en_route" ? "Waiting for driver's location…" : "Driver hasn't set off yet";
+              } else if (status === "arrived") {
+                label = "Driver is at the pickup point";
+              } else if (isStale) {
+                label = `Last seen ${formatAgo(ageSeconds)}`;
+              } else if (etaMinutes != null) {
+                label = `Arriving in ~${etaMinutes} min`;
+              } else {
+                label = "Live";
+              }
+              return (
+                <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-[11px] font-medium text-[#2C2C2A] shadow-sm">
+                  {position && !isStale && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#639922" }} />}
+                  {label}
+                </div>
+              );
+            })()}
           </div>
         </EmbossCard>
       )}
@@ -521,7 +629,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           <div className="flex items-center gap-3">
             <div
               className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white"
-              style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+              style={{ background: "var(--accent-gradient)" }}
             >
               {driver.photoUrl ? (
                 <img src={driver.photoUrl} alt={driver.businessName} className="h-full w-full object-cover" />
@@ -544,7 +652,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                   setHasUnreadChat(false);
                 }}
                 className="relative flex h-11 w-11 items-center justify-center rounded-full"
-                style={{ background: "#185FA5" }}
+                style={{ background: "var(--accent-gradient)" }}
                 aria-label="Chat with driver"
               >
                 <MessageSquare size={14} color="#FFFFFF" />
@@ -561,10 +669,10 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                 <a
                   href={`tel:${phoneLinks.tel}`}
                   className="flex h-11 w-11 items-center justify-center rounded-full"
-                  style={{ background: "#F0EEE7", boxShadow: "3px 3px 6px rgba(44,44,42,0.14), -3px -3px 6px rgba(255,255,255,0.85)" }}
+                  style={{ background: "#F0EEE7", boxShadow: "var(--shadow-btn)" }}
                   aria-label="Call driver"
                 >
-                  <Phone size={14} color="#185FA5" />
+                  <Phone size={14} color="var(--accent)" />
                 </a>
                 <a
                   href={`https://wa.me/${phoneLinks.whatsapp}`}
@@ -636,7 +744,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
             </div>
           ))}
           <div className="flex items-start gap-2">
-            <MapPin size={14} color="#185FA5" className="mt-0.5" />
+            <MapPin size={14} color="var(--accent)" className="mt-0.5" />
             <div>
               <div className="text-[#2C2C2A]">{booking.dropoff.address}</div>
               <div className="text-[11px] text-[#8C8977]">Drop-off</div>
@@ -705,7 +813,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                 onClick={handleSubmitRating}
                 disabled={submittingRating}
                 className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
-                style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+                style={{ background: "var(--accent-gradient)" }}
               >
                 {submittingRating ? <Loader2 size={15} className="animate-spin" /> : null}
                 {submittingRating ? "Submitting…" : "Submit rating"}
@@ -724,7 +832,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
       {isDone && tipAmountPaid == null && tipChoice !== "skip" && !isSharedView && (
         <EmbossCard className="mb-4 p-5">
           <div className="mb-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-[#2C2C2A]">
-            <HeartHandshake size={16} color="#378ADD" /> Add a tip?
+            <HeartHandshake size={16} color="var(--accent)" /> Add a tip?
           </div>
           <div className="mb-3 text-center text-xs text-[#8C8977]">100% goes directly to your driver.</div>
 
@@ -740,7 +848,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                     }}
                     disabled={creatingTipIntent}
                     className="rounded-lg py-2.5 text-sm font-semibold text-[#2C2C2A] disabled:opacity-60"
-                    style={{ background: tipChoice === n ? "#E1F0FF" : "#F1EFE8" }}
+                    style={{ background: tipChoice === n ? "#FFF3C4" : "#F1EFE8" }}
                   >
                     €{n}
                   </button>
@@ -749,7 +857,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                   onClick={() => setTipChoice("custom")}
                   disabled={creatingTipIntent}
                   className="rounded-lg py-2.5 text-xs font-semibold text-[#2C2C2A] disabled:opacity-60"
-                  style={{ background: tipChoice === "custom" ? "#E1F0FF" : "#F1EFE8" }}
+                  style={{ background: tipChoice === "custom" ? "#FFF3C4" : "#F1EFE8" }}
                 >
                   Other
                 </button>
@@ -770,7 +878,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                     onClick={() => handleChooseTipAmount(Number(customTipInput))}
                     disabled={!customTipInput || Number(customTipInput) <= 0 || creatingTipIntent}
                     className="rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg, #378ADD, #0C447C)" }}
+                    style={{ background: "var(--accent-gradient)" }}
                   >
                     Go
                   </button>
@@ -812,8 +920,8 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           onClick={onBookAgain}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
           style={{
-            background: "linear-gradient(135deg, #378ADD, #0C447C)",
-            boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+            background: "var(--accent-gradient)",
+            boxShadow: "var(--shadow-accent-btn)",
           }}
         >
           Book {driver.businessName || "again"}
@@ -823,8 +931,8 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
           onClick={onBookAgain}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white"
           style={{
-            background: "linear-gradient(135deg, #378ADD, #0C447C)",
-            boxShadow: "3px 3px 8px rgba(4,44,83,0.35), -2px -2px 6px rgba(133,183,235,0.5)",
+            background: "var(--accent-gradient)",
+            boxShadow: "var(--shadow-accent-btn)",
           }}
         >
           Back to home
@@ -892,7 +1000,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
             <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full" style={{ background: "#E4E2DA" }} />
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#2C2C2A]">
-                <MessageSquare size={15} color="#185FA5" />
+                <MessageSquare size={15} color="var(--accent)" />
                 Chat with {driver?.businessName || "your driver"}
               </div>
               <button
