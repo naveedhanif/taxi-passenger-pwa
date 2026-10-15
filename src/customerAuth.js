@@ -132,3 +132,35 @@ export async function signOutCustomer() {
   await supabase.auth.signOut();
 }
 
+
+/**
+ * Emails a password-reset link. The link brings the customer back to this
+ * same driver page (same path), where App.jsx shows the "set a new
+ * password" screen. NOTE: this exact origin must be allowed under
+ * Supabase → Authentication → URL Configuration → Redirect URLs.
+ * Always reports success for unknown emails too, so the form can't be used
+ * to discover which addresses have accounts.
+ */
+export async function requestPasswordReset(email) {
+  const redirectTo = `${window.location.origin}${window.location.pathname}`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) {
+    console.error("requestPasswordReset failed:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function setNewPassword(newPassword) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    console.error("setNewPassword: no recovery session — link expired or already used.");
+    return { error: "This reset link has expired or was already used. Request a new one." };
+  }
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    console.error("setNewPassword failed:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
+}

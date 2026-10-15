@@ -6,14 +6,14 @@ import FareEstimateScreen from "./FareEstimateScreen.jsx";
 import PaymentScreen from "./PaymentScreen.jsx";
 import BookingConfirmedScreen from "./BookingConfirmedScreen.jsx";
 import GuestAccountChoice from "./GuestAccountChoice.jsx";
-import CustomerAuthScreen from "./CustomerAuthScreen.jsx";
+import CustomerAuthScreen, { ResetPasswordScreen } from "./CustomerAuthScreen.jsx";
 import AccountHistoryScreen from "./AccountHistoryScreen.jsx";
 import DriverProfileScreen from "./DriverProfileScreen.jsx";
 import { createBooking } from "./bookingApi.js";
 import { getBookingStatus } from "./bookingStatusApi.js";
 import { getCustomerForDriver, signOutCustomer, ensureCustomerRecord } from "./customerAuth.js";
 import { getCustomerBookings } from "./customerBookingsApi.js";
-import { supabase } from "./supabaseClient.js";
+import { supabase, OPENED_FROM_RECOVERY_LINK } from "./supabaseClient.js";
 import { getDriverOnlineStatus, getDriverPhotos } from "./driverAvailabilityApi.js";
 import { listSavedLocations, addSavedLocation, deleteSavedLocation } from "./savedLocationsApi.js";
 import { listRecurringRides, addRecurringRide, toggleRecurringRide, deleteRecurringRide } from "./recurringRidesApi.js";
@@ -54,6 +54,8 @@ const STATUS_ALERT_STYLES = {
 
 function AppInner() {
   const [screen, setScreen] = useState("booking");
+  // Opened from a password-reset email → show the "choose a new password" screen first.
+  const [recoveringPassword, setRecoveringPassword] = useState(OPENED_FROM_RECOVERY_LINK);
   const [menuOpen, setMenuOpen] = useState(false);
   // One-level "back" support for sub-screens (status/account/auth) —
   // this app is a flat state-driven screen switcher, not a router, so
@@ -1163,6 +1165,21 @@ function AppInner() {
         <div className="max-w-sm text-sm text-[var(--text-secondary)]">
           This booking link doesn't match an active driver. Double-check the link or QR code with your driver.
         </div>
+      </div>
+    );
+  }
+
+  if (recoveringPassword) {
+    return (
+      <div className="min-h-screen" style={{ background: "var(--bg-page)" }}>
+        <ResetPasswordScreen
+          driverName={businessName}
+          onDone={() => {
+            window.history.replaceState(null, "", window.location.pathname);
+            setRecoveringPassword(false);
+            setScreen("account");
+          }}
+        />
       </div>
     );
   }

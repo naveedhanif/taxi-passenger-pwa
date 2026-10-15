@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Mail, Lock, User, ArrowRight, AlertCircle, ArrowLeft, Gift } from "lucide-react";
-import { signUpCustomer, signInCustomer } from "./customerAuth";
+import { signUpCustomer, signInCustomer, requestPasswordReset, setNewPassword } from "./customerAuth";
 
 function useGoogleFont() {
   useEffect(() => {
@@ -38,7 +38,8 @@ function Field({ icon: Icon, ...props }) {
  */
 export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess, onBack, initialReferralCode = "" }) {
   useGoogleFont();
-  const [mode, setMode] = useState("signup"); // "signup" | "signin"
+  const [mode, setMode] = useState("signup"); // "signup" | "signin" | "forgot"
+  const [resetSent, setResetSent] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -52,6 +53,17 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
     e.preventDefault();
     setErrorMessage("");
     setSubmitting(true);
+
+    if (mode === "forgot") {
+      const result = await requestPasswordReset(email.trim());
+      setSubmitting(false);
+      if (result.error) {
+        setErrorMessage(result.error);
+        return;
+      }
+      setResetSent(true);
+      return;
+    }
 
     if (mode === "signup") {
       const result = await signUpCustomer({ email, password, name, phone, driverId, referralCode: referralCode.trim() || null });
@@ -91,7 +103,26 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
         <div className="w-11" />
       </div>
 
-      {confirmationSent ? (
+      {resetSent ? (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <Mail size={28} color="var(--accent)" />
+          <div className="text-base font-semibold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
+            Check your email
+          </div>
+          <div className="max-w-xs text-sm text-[var(--text-secondary)]">
+            If an account exists for {email}, we've sent a link to reset your password. Open it on this phone, then choose a new password.
+          </div>
+          <button
+            onClick={() => {
+              setResetSent(false);
+              setMode("signin");
+            }}
+            className="mt-2 text-xs font-medium text-(--accent) underline underline-offset-2"
+          >
+            Back to sign in
+          </button>
+        </div>
+      ) : confirmationSent ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <Mail size={28} color="var(--accent)" />
           <div className="text-base font-semibold text-[var(--text-primary)]" style={{ fontFamily: "'Space Grotesk'" }}>
@@ -113,10 +144,10 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
       ) : (
         <>
       <div className="mb-1 text-xl" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700, color: "var(--text-primary)" }}>
-        {mode === "signup" ? "Create your account" : "Welcome back"}
+        {mode === "signup" ? "Create your account" : mode === "forgot" ? "Reset your password" : "Welcome back"}
       </div>
       <div className="mb-6 text-sm text-[var(--text-secondary)]">
-        {mode === "signup" ? "Save your trip history and book faster next time." : "Sign in to see your bookings."}
+        {mode === "signup" ? "Save your trip history and book faster next time." : mode === "forgot" ? "Enter your email and we'll send you a reset link." : "Sign in to see your bookings."}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3.5">
@@ -127,7 +158,18 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
           </>
         )}
         <Field icon={Mail} type="email" placeholder="Email address" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Field icon={Lock} type="password" placeholder="Password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+        {mode !== "forgot" && (
+          <Field icon={Lock} type="password" placeholder="Password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+        )}
+        {mode === "signin" && (
+          <button
+            type="button"
+            onClick={() => { setErrorMessage(""); setMode("forgot"); }}
+            className="block text-xs font-medium text-(--accent) underline underline-offset-2"
+          >
+            Forgot password?
+          </button>
+        )}
         {mode === "signup" && (
           <Field
             icon={Gift}
@@ -150,16 +192,16 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
           className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
           style={{ background: "var(--accent-gradient)", boxShadow: "var(--shadow-accent-btn)" }}
         >
-          {submitting ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+          {submitting ? "Please wait…" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}
           {!submitting && <ArrowRight size={15} />}
         </button>
       </form>
 
       <button
-        onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
+        onClick={() => { setErrorMessage(""); setMode(mode === "signup" ? "signin" : mode === "forgot" ? "signin" : "signup"); }}
         className="mt-4 w-full text-center text-xs font-medium text-(--accent) underline underline-offset-2"
       >
-        {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
+        {mode === "forgot" ? "Back to sign in" : mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
       </button>
       </>
       )}
@@ -167,3 +209,60 @@ export default function CustomerAuthScreen({ driverId, driverName, onAuthSuccess
   );
 }
 
+
+
+/**
+ * Shown when the app is opened from a password-reset email link.
+ */
+export function ResetPasswordScreen({ driverName, onDone }) {
+  useGoogleFont();
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErrorMessage("");
+    if (password !== confirm) {
+      setErrorMessage("The two passwords don't match.");
+      return;
+    }
+    setSubmitting(true);
+    const result = await setNewPassword(password);
+    setSubmitting(false);
+    if (result.error) {
+      setErrorMessage(result.error);
+      return;
+    }
+    onDone?.();
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-[430px] p-5" style={{ backgroundColor: "var(--bg-page)", fontFamily: "Inter", minHeight: 640 }}>
+      <div className="mb-5 text-center text-sm font-semibold text-[var(--text-primary)]">{driverName}</div>
+      <div className="mb-1 text-xl" style={{ fontFamily: "'Space Grotesk'", fontWeight: 700, color: "var(--text-primary)" }}>
+        Choose a new password
+      </div>
+      <div className="mb-6 text-sm text-[var(--text-secondary)]">At least 6 characters.</div>
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <Field icon={Lock} type="password" placeholder="New password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Field icon={Lock} type="password" placeholder="Confirm new password" required minLength={6} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        {errorMessage && (
+          <div className="flex items-center gap-2 rounded-lg p-3 text-xs" style={{ background: "var(--error-bg)", color: "var(--error-text)" }}>
+            <AlertCircle size={14} /> {errorMessage}
+          </div>
+        )}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white disabled:opacity-60"
+          style={{ background: "var(--accent-gradient)", boxShadow: "var(--shadow-accent-btn)" }}
+        >
+          {submitting ? "Saving…" : "Save new password"}
+          {!submitting && <ArrowRight size={15} />}
+        </button>
+      </form>
+    </div>
+  );
+}
