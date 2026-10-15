@@ -96,7 +96,7 @@ export default function FareEstimateScreen({
   }
   // "now": full fare charged upfront. "later": only the deposit is
   // charged now; the rest is settled with the driver in the taxi.
-  const [paymentTiming, setPaymentTiming] = useState("now");
+  const [chosenTiming, setPaymentTiming] = useState("now");
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +169,15 @@ export default function FareEstimateScreen({
         ) / 100
       : 0;
   const displayTotal = fare ? (effectivePromo ? Math.round((fareBeforeAnyDiscount - promoDiscountAmount) * 100) / 100 : fare.total) : 0;
+  // When the driver has a deposit switched on, the passenger is never
+  // offered a choice: they pay only the deposit now and the rest in the
+  // taxi. The one exception is a trip cheaper than the deposit itself,
+  // where the server rejects pay-later (the deposit would cover the
+  // whole fare) — that trip is simply paid in full now. With the
+  // deposit off, the passenger still chooses between pay-now and
+  // pay-in-the-taxi (nothing charged now).
+  const depositApplies = depositEnabled && payLaterDepositAmount > 0 && payLaterDepositAmount < displayTotal;
+  const paymentTiming = depositEnabled ? (depositApplies ? "later" : "now") : chosenTiming;
 
   return (
     <div
@@ -366,6 +375,24 @@ export default function FareEstimateScreen({
             style={{ background: "var(--bg-card)", border: "1px solid var(--border-card)", boxShadow: "var(--shadow-raised)" }}
           >
             <div className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Payment method</div>
+            {depositEnabled ? (
+              <div
+                className="flex items-start gap-3 rounded-lg p-3"
+                style={{ background: "var(--info-bg)", border: "1.5px solid var(--accent)" }}
+              >
+                {depositApplies ? <Banknote size={18} color="var(--accent)" /> : <CreditCard size={18} color="var(--accent)" />}
+                <div>
+                  <div className="text-xs font-semibold text-[var(--text-primary)]">
+                    {depositApplies ? `Pay a €${payLaterDepositAmount.toFixed(2)} deposit now` : `Pay €${displayTotal.toFixed(2)} now`}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
+                    {depositApplies
+                      ? "The rest is paid to the driver after the ride"
+                      : "This trip is cheaper than the deposit, so it's paid in full by card"}
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
@@ -391,9 +418,10 @@ export default function FareEstimateScreen({
               >
                 <Banknote size={16} color={paymentTiming === "later" ? "var(--accent)" : "var(--text-secondary)"} />
                 <span className="text-xs font-semibold text-[var(--text-primary)]">Pay in the taxi</span>
-                <span className="text-[11px] text-[var(--text-secondary)]">{depositEnabled ? "Cash or card after the ride" : "No deposit — pay after the ride"}</span>
+                <span className="text-[11px] text-[var(--text-secondary)]">No deposit — pay after the ride</span>
               </button>
             </div>
+            )}
 
             {paymentTiming === "later" && depositEnabled && (
               <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed" style={{ background: "var(--warning-bg)", color: "var(--warning-text)" }}>
