@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
     <title>Book a Taxi</title>
     <meta name="theme-color" content="#FFC400" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" id="app-manifest" href="/api/manifest" />
+    <script>
+      // Point the manifest at this driver so "Add to Home Screen" opens
+      // their booking page, not the bare site.
+      (function () {
+        var slug = location.pathname.split("/").filter(Boolean)[0];
+        if (slug) document.getElementById("app-manifest").href = "/api/manifest?slug=" + encodeURIComponent(slug);
+      })();
+    </script>
     <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
