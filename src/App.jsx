@@ -672,7 +672,22 @@ function AppInner() {
   // via booking_slug. This is what makes one deployed app work for every
   // driver — the slug in the URL decides who the passenger is booking.
   useEffect(() => {
-    const slug = window.location.pathname.replace(/^\/+|\/+$/g, "");
+    let slug = window.location.pathname.replace(/^\/+|\/+$/g, "");
+    if (!slug) {
+      // A home-screen shortcut can open the bare site (some browsers,
+      // e.g. Chrome on iPhone, don't honour the per-driver manifest).
+      // Fall back to the last driver this device opened rather than
+      // showing a dead-end error.
+      try {
+        const remembered = localStorage.getItem("taxi_last_driver_slug");
+        if (remembered && /^[a-z0-9-]{1,80}$/i.test(remembered)) {
+          slug = remembered;
+          window.history.replaceState(null, "", `/${remembered}${window.location.search}`);
+        }
+      } catch (err) {
+        console.error("Couldn't read the remembered driver slug:", err);
+      }
+    }
     if (!slug) {
       setDriverLookupStatus("no_slug");
       return;
@@ -696,6 +711,11 @@ function AppInner() {
       setDriverId(data.id);
       setBusinessName(data.business_name || "");
       setDriverLookupStatus("found");
+      try {
+        localStorage.setItem("taxi_last_driver_slug", slug);
+      } catch (err) {
+        console.error("Couldn't remember the driver slug:", err);
+      }
 
       // Shared trip link — see passenger-booking-status.jsx's "Share
       // trip" button, which builds a link in exactly this shape. Reuses
