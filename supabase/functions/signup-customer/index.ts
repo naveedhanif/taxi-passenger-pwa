@@ -159,9 +159,14 @@ Deno.serve(async (req) => {
           .eq("referral_code", body.referral_code.trim().toUpperCase())
           .maybeSingle();
 
-        if (referrer) {
-          const { data: driver } = await supabase.from("drivers").select("referral_reward_percent").eq("id", body.driver_id).single();
-          const rewardPercent = driver?.referral_reward_percent ?? 10;
+        // Only honour referral codes when the driver has Refer & Earn on.
+        const { data: driver } = await supabase.from("drivers").select("referral_enabled, referral_reward_percent").eq("id", body.driver_id).single();
+        if (referrer && !driver?.referral_enabled) {
+          console.error("signup-customer: referral code ignored — driver has Refer & Earn off.");
+        }
+
+        if (referrer && driver?.referral_enabled) {
+          const rewardPercent = driver.referral_reward_percent ?? 10;
 
           const { error: referralInsertError } = await supabase.from("referrals").insert({
             driver_id: body.driver_id,

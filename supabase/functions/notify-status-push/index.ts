@@ -87,7 +87,14 @@ Deno.serve(async (req) => {
     // to push to) — both are expected, non-error outcomes.
 
     // ---- Referral reward, only on a genuine trip completion ----
+    let referralEnabled = false;
     if (booking.status === "completed" && booking.customer_id) {
+      // Separate query so a missing column can never break the status push above.
+      const { data: flag, error: flagError } = await supabase.from("drivers").select("referral_enabled").eq("id", body.driver_id).single();
+      if (flagError) console.error("notify-status-push: couldn't read referral_enabled:", flagError.message);
+      referralEnabled = flag?.referral_enabled === true;
+    }
+    if (booking.status === "completed" && booking.customer_id && referralEnabled) {
       try {
         const { data: referral } = await supabase
           .from("referrals")

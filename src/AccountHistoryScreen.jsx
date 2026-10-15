@@ -131,6 +131,11 @@ export default function AccountHistoryScreen({
     let cancelled = false;
     getMyReferralCode({ driverId, customerSessionToken }).then((result) => {
       if (cancelled || result.error) return;
+      // Driver has Refer & Earn off → show nothing.
+      if (result.enabled === false) {
+        setReferralCode(null);
+        return;
+      }
       setReferralCode(result.referralCode);
       setRewardPercent(result.rewardPercent);
     });

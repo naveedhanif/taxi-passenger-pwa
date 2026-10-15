@@ -55,8 +55,14 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (userError || !userData?.user) return jsonError("Not signed in", 401);
 
-    const { data: driver } = await supabase.from("drivers").select("referral_reward_percent").eq("id", body.driver_id).single();
-    const rewardPercent = driver?.referral_reward_percent ?? 10;
+    const { data: driver, error: driverError } = await supabase.from("drivers").select("referral_enabled, referral_reward_percent").eq("id", body.driver_id).single();
+    if (driverError) console.error("get-my-referral-code: driver lookup failed:", driverError.message);
+    // The driver controls Refer & Earn. Off (or the setting unreadable) →
+    // no code is generated or shown at all.
+    if (!driver?.referral_enabled) {
+      return new Response(JSON.stringify({ enabled: false }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const rewardPercent = driver.referral_reward_percent ?? 10;
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
@@ -68,7 +74,7 @@ Deno.serve(async (req) => {
 
     if (customer.referral_code) {
       return new Response(
-        JSON.stringify({ referralCode: customer.referral_code, rewardPercent }),
+        JSON.stringify({ enabled: true, referralCode: customer.referral_code, rewardPercent }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -86,7 +92,7 @@ Deno.serve(async (req) => {
     if (!saved) return jsonError("Couldn't generate a referral code — try again", 500);
 
     return new Response(
-      JSON.stringify({ referralCode: code, rewardPercent }),
+      JSON.stringify({ enabled: true, referralCode: code, rewardPercent }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

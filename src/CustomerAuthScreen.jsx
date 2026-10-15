@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Mail, Lock, User, ArrowRight, AlertCircle, ArrowLeft, Gift } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, AlertCircle, ArrowLeft, Gift, Eye, EyeOff } from "lucide-react";
 import { signUpCustomer, signInCustomer, requestPasswordReset, setNewPassword } from "./customerAuth";
 
 function useGoogleFont() {
@@ -13,6 +13,8 @@ function useGoogleFont() {
 }
 
 function Field({ icon: Icon, ...props }) {
+  const [reveal, setReveal] = useState(false);
+  const isPassword = props.type === "password";
   return (
     <div
       className="flex items-center gap-2.5 rounded-2xl px-4 py-3"
@@ -21,9 +23,20 @@ function Field({ icon: Icon, ...props }) {
       <Icon size={16} color="var(--text-muted)" />
       <input
         {...props}
+        type={isPassword && reveal ? "text" : props.type}
         className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
         style={{ color: "var(--text-primary)" }}
       />
+      {isPassword && (
+        <button
+          type="button"
+          onClick={() => setReveal((v) => !v)}
+          aria-label={reveal ? "Hide password" : "Show password"}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+        >
+          {reveal ? <EyeOff size={16} color="var(--text-muted)" /> : <Eye size={16} color="var(--text-muted)" />}
+        </button>
+      )}
     </div>
   );
 }
