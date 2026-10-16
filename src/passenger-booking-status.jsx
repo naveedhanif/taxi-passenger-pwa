@@ -90,6 +90,15 @@ function formatAgo(seconds) {
   return m < 60 ? `${m} min ago` : "over an hour ago";
 }
 
+// Mapbox's fitBounds only reads the FIRST TWO points of an array, so passing
+// [pickup, dropoff, carPosition] silently ignored the car and the map never
+// zoomed out to show it. Build the bounds explicitly from every point.
+function boundsOf(points) {
+  const b = new mapboxgl.LngLatBounds(points[0], points[0]);
+  points.forEach((p) => b.extend(p));
+  return b;
+}
+
 function LiveTrackingMap({ pickup, dropoff, stops = [], status, livePosition }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -146,7 +155,7 @@ function LiveTrackingMap({ pickup, dropoff, stops = [], status, livePosition }) 
 
       mapLoadedRef.current = true;
       syncDriverMarker(true);
-      if (!livePosition) map.fitBounds([pickupLngLat, ...stopLngLats, dropoffLngLat], { padding: FIT_PADDING, duration: 0, maxZoom: 15 });
+      if (!livePosition) map.fitBounds(boundsOf([pickupLngLat, ...stopLngLats, dropoffLngLat]), { padding: FIT_PADDING, duration: 0, maxZoom: 15 });
 
       getRouteMultiStop([pickup, ...stops.filter((s) => s.lat != null && s.lng != null), dropoff], mapboxgl.accessToken)
         .then((r) => {
@@ -195,13 +204,13 @@ function LiveTrackingMap({ pickup, dropoff, stops = [], status, livePosition }) 
       el.innerHTML =
         '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M5 17a2 2 0 100 4 2 2 0 000-4zm14 0a2 2 0 100 4 2 2 0 000-4zM5 17l1.5-6h11L19 17M6.5 11l1-3h9l1 3"/></svg>';
       driverMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat(pos).addTo(map);
-      map.fitBounds([pickupLngLat, dropoffLngLat, pos], { padding: FIT_PADDING, duration: isFirst ? 0 : 600, maxZoom: 15 });
+      map.fitBounds(boundsOf([pickupLngLat, dropoffLngLat, pos]), { padding: FIT_PADDING, duration: isFirst ? 0 : 600, maxZoom: 15 });
     } else {
       driverMarkerRef.current.setLngLat(pos);
       // Re-frame only if the car has driven out of view, so the map
       // doesn't jump around on every 8-second update.
       if (!map.getBounds().contains(pos)) {
-        map.fitBounds([pickupLngLat, dropoffLngLat, pos], { padding: FIT_PADDING, duration: 600, maxZoom: 15 });
+        map.fitBounds(boundsOf([pickupLngLat, dropoffLngLat, pos]), { padding: FIT_PADDING, duration: 600, maxZoom: 15 });
       }
     }
   }
