@@ -24,6 +24,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
   // "Loading…" spinner with no way to tell it had actually failed
   // (e.g. the messages table/functions not deployed yet).
   const [loadError, setLoadError] = useState("");
+  const [sendError, setSendError] = useState("");
   const scrollRef = useRef(null);
   const audioRef = useRef(null);
   // Tracks which message ids we've already seen, so a genuinely NEW
@@ -117,6 +118,16 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
 
+  // When the keyboard opens/closes the visible area changes — keep the
+  // latest message in view instead of leaving it hidden above the fold.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const toBottom = () => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    vv.addEventListener("resize", toBottom);
+    return () => vv.removeEventListener("resize", toBottom);
+  }, []);
+
   async function handleSend() {
     const text = draft.trim();
     if (!text || sending) return;
@@ -132,7 +143,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
       // Roll back the optimistic bubble on failure so it's not
       // misleadingly shown as delivered.
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      window.alert(result.error);
+      setSendError(result.error);
     }
   }
 
@@ -144,7 +155,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
           <MessageCircle size={13} /> Messages
         </div>
       )}
-      <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ maxHeight: maxListHeight }}>
+      <div ref={scrollRef} className="space-y-2 overflow-y-auto p-3" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", maxHeight: maxListHeight }}>
         {!loaded ? (
           <div className="flex items-center justify-center gap-1.5 py-4 text-xs text-[var(--text-muted)]">
             <Loader2 size={12} className="animate-spin" /> Loading…
@@ -159,7 +170,7 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
           messages.map((m) => (
             <div key={m.id} className={`flex ${m.sender_role === selfRole ? "justify-end" : "justify-start"}`}>
               <div
-                className="max-w-[75%] rounded-2xl px-3 py-1.5 text-xs"
+                className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm"
                 style={
                   m.sender_role === selfRole
                     ? { background: "var(--accent-gradient)", color: "var(--on-brand)" }
@@ -172,6 +183,11 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
           ))
         )}
       </div>
+      {sendError && (
+        <div className="flex items-center gap-1.5 px-3 pb-1 text-xs" style={{ color: "var(--error-text)" }}>
+          <AlertCircle size={12} /> Message not sent — {sendError}
+        </div>
+      )}
       <div className="flex items-center gap-2 border-t border-[var(--border-card)] p-2.5">
         <input
           value={draft}
@@ -183,17 +199,21 @@ export default function ChatPanel({ bookingId, guestAccessToken, customerSession
             }
           }}
           placeholder="Type a message…"
-          className="flex-1 rounded-full px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="on"
+          // 16px stops iOS from zooming the whole page when the box is tapped.
+          className="min-w-0 flex-1 rounded-full px-4 py-2.5 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
           style={{ background: "var(--bg-card-alt)" }}
         />
         <button
           onClick={handleSend}
           disabled={!draft.trim() || sending}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
           style={{ background: "var(--accent-gradient)" }}
           aria-label="Send"
         >
-          <Send size={13} />
+          <Send size={16} />
         </button>
       </div>
     </div>

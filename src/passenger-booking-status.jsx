@@ -11,6 +11,7 @@ import TipPaymentForm from "./TipPaymentForm.jsx";
 import { formatPhoneForLinks } from "./phoneLinks.js";
 import { supabase } from "./supabaseClient.js";
 import ChatPanel from "./ChatPanel.jsx";
+import { useVisualViewport } from "./useVisualViewport.js";
 import { useTheme } from "./ThemeContext.jsx";
 import { getRouteMultiStop } from "./mapboxClient.js";
 import { pinElement } from "./BookingMap.jsx";
@@ -327,6 +328,17 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   // poll — and the sound/vibrate it triggers — keeps running even
   // while the sheet is visually closed.
   const [chatOpen, setChatOpen] = useState(false);
+  // Keyboard-aware chat sheet (see useVisualViewport) + stop the page behind
+  // from scrolling while the sheet is open.
+  const { height: viewportHeight, keyboardInset } = useVisualViewport(chatOpen);
+  useEffect(() => {
+    if (!chatOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [chatOpen]);
 
   useEffect(() => {
     onChatOpenChange?.(chatOpen);
@@ -1053,7 +1065,9 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
             style={{
               background: "var(--bg-page)",
               boxShadow: "0 -8px 24px rgba(44,44,42,0.18)",
-              maxHeight: "80vh",
+              bottom: chatOpen ? keyboardInset : 0,
+              maxHeight: chatOpen ? Math.round(viewportHeight * 0.92) : "80dvh",
+              paddingBottom: keyboardInset > 0 ? 0 : "env(safe-area-inset-bottom)",
               transform: chatOpen ? "translateY(0)" : "translateY(100%)",
               transition: "transform 260ms ease",
             }}
@@ -1083,7 +1097,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
                 customerSessionToken={customerSessionToken}
                 selfRole="passenger"
                 hideHeader
-                maxListHeight="55vh"
+                maxListHeight={`${Math.max(140, Math.round(viewportHeight * 0.92) - 170)}px`}
                 onNewMessage={() => {
                   // Only flag unread if the sheet isn't the thing the
                   // passenger is already looking at.

@@ -98,3 +98,25 @@
 .booking-map .mapboxgl-ctrl-bottom-right {
   margin-bottom: 40px;
 }
+
+/* ---- Mobile polish ---------------------------------------------------
+   iOS Safari zooms the whole page when a text box smaller than 16px is
+   focused, and it doesn't zoom back out — the "I have to pinch to fix the
+   screen" problem. Keep every editable control at 16px on touch devices
+   (visual size is unchanged on desktop). */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+/* No 300ms double-tap-to-zoom delay on tappable things; stop iOS inflating text after rotation. */
+button, a, [role="button"], label, summary {
+  touch-action: manipulation;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}

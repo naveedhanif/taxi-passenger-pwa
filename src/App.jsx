@@ -1138,7 +1138,7 @@ function AppInner() {
   // driver this visit is for. ----
   if (driverLookupStatus === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-sm text-[var(--text-secondary)]">
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-page)] text-sm text-[var(--text-secondary)]">
         <Loader2 size={18} className="mr-2 animate-spin" /> Loading…
       </div>
     );
@@ -1146,7 +1146,7 @@ function AppInner() {
 
   if (driverLookupStatus === "no_slug") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[var(--bg-page)] p-6 text-center">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-2 bg-[var(--bg-page)] p-6 text-center">
         <div className="text-base font-semibold text-[var(--text-primary)]">No driver specified</div>
         <div className="max-w-sm text-sm text-[var(--text-secondary)]">
           This link needs a driver's booking page — e.g.{" "}
@@ -1159,7 +1159,7 @@ function AppInner() {
 
   if (driverLookupStatus === "not_found") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-[var(--bg-page)] p-6 text-center">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-2 bg-[var(--bg-page)] p-6 text-center">
         <AlertCircle size={22} className="text-[var(--error-text)]" />
         <div className="text-base font-semibold text-[var(--text-primary)]">Driver not found</div>
         <div className="max-w-sm text-sm text-[var(--text-secondary)]">
@@ -1171,7 +1171,7 @@ function AppInner() {
 
   if (recoveringPassword) {
     return (
-      <div className="min-h-screen" style={{ background: "var(--bg-page)" }}>
+      <div className="min-h-dvh" style={{ background: "var(--bg-page)" }}>
         <ResetPasswordScreen
           driverName={businessName}
           onDone={() => {
@@ -1185,7 +1185,7 @@ function AppInner() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg-page)" }}>
+    <div className="min-h-dvh" style={{ background: "var(--bg-page)" }}>
       {/* Mobile: hamburger bar — hidden on the two map-first screens, which draw their own floating header over the map */}
       {screen !== "booking" && screen !== "status" && (
         <>
