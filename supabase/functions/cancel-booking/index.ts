@@ -160,6 +160,8 @@ Deno.serve(async (req) => {
     }
 
     const updatePayload: Record<string, unknown> = { status: "canceled" };
+    // A cancelled pay-later booking has nothing left to collect.
+    if (payLater) updatePayload.balance_due = 0;
     if (refunded) {
       if (payLater) updatePayload.deposit_payment_status = "refunded";
       else updatePayload.payment_status = "refunded";
