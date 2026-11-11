@@ -554,7 +554,10 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
   const isStale = ageSeconds != null && ageSeconds > STALE_AFTER_SECONDS;
   let liveLabel;
   if (!position) {
-    liveLabel = status === "en_route" ? "Waiting for driver's location…" : "Driver hasn't set off yet";
+    liveLabel =
+      status === "en_route" ? "Waiting for driver's location…"
+      : status === "in_progress" ? "Trip in progress"
+      : "Driver hasn't set off yet";
   } else if (status === "arrived") {
     liveLabel = "Driver is at the pickup point";
   } else if (isStale) {
@@ -1037,7 +1040,7 @@ export default function BookingStatus({ bookingId, guestAccessToken, customerSes
         </div>
       ) : isSharedView ? (
         <div className="text-center text-xs text-[var(--text-muted)]">You're viewing a shared trip.</div>
-      ) : phoneLinks ? (
+      ) : phoneLinks && (status === "en_route" || status === "arrived") ? (
         <div className="text-center text-xs text-[var(--text-muted)]">
           Your driver is already on the way — contact them directly above to cancel.
         </div>

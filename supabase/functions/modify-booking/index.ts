@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
-      .select("id, driver_id, customer_id, access_token, status, payment_timing, estimated_fare, discount_amount, promo_code_id")
+      .select("id, driver_id, customer_id, access_token, status, payment_timing, estimated_fare, discount_amount, promo_code_id, deposit_amount")
       .eq("id", body.booking_id)
       .single();
     if (bookingError || !booking) return jsonError("Booking not found", 404);
@@ -174,9 +174,19 @@ Deno.serve(async (req) => {
     const fareDifference = Math.round((newEstimatedFare - oldFare) * 100) / 100;
     const paymentTimingIsNow = booking.payment_timing === "now";
 
+    // Cash ("pay later") bookings: what the driver collects is the new fare
+    // minus the deposit already taken (0 when the driver has deposits off).
+    // Without this, balance_due kept the OLD fare's figure after a change.
+    const updateFields: Record<string, unknown> = {};
+    if (booking.payment_timing === "later") {
+      const deposit = Number(booking.deposit_amount ?? 0);
+      updateFields.balance_due = Math.max(0, Math.round((newEstimatedFare - deposit) * 100) / 100);
+    }
+
     const { error: updateError } = await supabase
       .from("bookings")
       .update({
+        ...updateFields,
         pickup_address: body.pickup_address,
         pickup_lat: body.pickup_lat,
         pickup_lng: body.pickup_lng,
