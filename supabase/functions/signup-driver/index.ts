@@ -79,6 +79,9 @@ Deno.serve(async (req) => {
         phone: body.phone || null,
         email: body.email,
         booking_slug: body.booking_slug,
+        // New drivers wait for the owner to approve them (owner dashboard
+        // toggle) before their booking link accepts bookings.
+        is_active: false,
       })
       .select("id")
       .single();
