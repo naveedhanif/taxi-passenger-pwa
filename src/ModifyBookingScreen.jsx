@@ -10,12 +10,15 @@ import { modifyBooking } from "./bookingStatusApi.js";
 // reimplementation. Stops aren't editable here yet — a deliberate,
 // disclosed scope boundary for this first version, not an oversight.
 
-function useDebouncedAddressSearch(query, mapboxToken, session) {
+function useDebouncedAddressSearch(query, mapboxToken, session, active) {
   const [suggestions, setSuggestions] = useState([]);
   const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
-    if (!mapboxToken || query.trim().length < 3) {
+    // Don't search (and pop open the dropdown) for the pre-filled address
+    // until the customer has actually typed in this field — otherwise the
+    // suggestion lists open on load and cover the date/time/Save controls.
+    if (!active || !mapboxToken || query.trim().length < 3) {
       setSuggestions([]);
       return;
     }
@@ -31,13 +34,14 @@ function useDebouncedAddressSearch(query, mapboxToken, session) {
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [query, mapboxToken, session]);
+  }, [query, mapboxToken, session, active]);
 
   return { suggestions, searchError, setSuggestions };
 }
 
 function AddressField({ label, value, onChange, onSelect, mapboxToken, session }) {
-  const { suggestions, searchError, setSuggestions } = useDebouncedAddressSearch(value, mapboxToken, session);
+  const [edited, setEdited] = useState(false);
+  const { suggestions, searchError, setSuggestions } = useDebouncedAddressSearch(value, mapboxToken, session, edited);
 
   return (
     <div className="relative mb-4">
@@ -46,7 +50,7 @@ function AddressField({ label, value, onChange, onSelect, mapboxToken, session }
         <MapPin size={15} className="shrink-0" color="var(--text-muted)" />
         <input
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => { setEdited(true); onChange(e.target.value); }}
           placeholder="Search an address"
           className="w-full bg-transparent text-sm outline-none"
           style={{ color: "var(--text-primary)" }}
